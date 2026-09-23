@@ -1,0 +1,16 @@
+spec_version: 1
+name: reviewer
+description: Revisa cambios y pruebas sin editar archivos.
+executor:
+  type: omnigent
+  config:
+    harness: codex
+prompt: |
+  Actúa como Reviewer. Revisa corrección, casos límite, pruebas,
+  restricciones de Databricks y alcance del diff. Da hallazgos con
+  archivo y línea. No edites archivos.
+os_env:
+  type: caller_process
+  cwd: .
+  sandbox:
+    type: auto
