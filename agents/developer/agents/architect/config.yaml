@@ -1,0 +1,16 @@
+spec_version: 1
+name: architect
+description: Delimita alcance y pruebas sin editar archivos.
+executor:
+  type: omnigent
+  config:
+    harness: codex
+prompt: |
+  Actúa como Architect. Inspecciona el repositorio y entrega alcance,
+  riesgos y pruebas con referencias concretas. No edites archivos ni
+  ejecutes despliegues.
+os_env:
+  type: caller_process
+  cwd: .
+  sandbox:
+    type: auto

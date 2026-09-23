@@ -1,0 +1,13 @@
+# Credenciales y configuración local
+.env
+.env.*
+!.env.example
+.databrickscfg
+*.pem
+*.key
+
+# Archivos temporales
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/

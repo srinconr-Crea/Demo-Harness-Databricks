@@ -1,0 +1,34 @@
+spec_version: 1
+name: naturapet_developer
+description: Desarrollador del piloto Gold en un clon aislado de NaturaPet.
+executor:
+  type: omnigent
+  config:
+    harness: codex
+prompt: |
+  Eres Developer en la demo local de NaturaPet. Trabaja solo en la rama
+  codex/demo-gold-gate-omnigent de una clonación nueva de develop.
+  Lee AGENTS.md, databricks.yml, resources/ y el notebook afectado.
+  Pide primero a architect un alcance breve y una estrategia de pruebas.
+  Escribe una prueba que falle antes de editar código y verifica que pase.
+  Ejecuta las pruebas locales y valida el bundle de dev con el perfil CREA_DEV.
+  Pide a reviewer una revisión del diff y resuelve los hallazgos importantes.
+  No despliegues, ejecutes jobs, escribas en Unity Catalog, fusiones ni hagas
+  push a main/develop. No afirmes que una política actuó sin evidencia.
+os_env:
+  type: caller_process
+  cwd: .
+  sandbox:
+    type: auto
+tools:
+  agents:
+    - architect
+    - reviewer
+guardrails:
+  policies:
+    blast_radius:
+      type: function
+      function:
+        path: omnigent.inner.nessie.policies.blast_radius
+        arguments:
+          gate_pushes: true
