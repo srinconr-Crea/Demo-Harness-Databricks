@@ -25,6 +25,8 @@ Personalización versionada de Omnigent para una demo local de desarrollo en Nat
 La [evaluación local](docs/evaluacion-local.md) recoge resultados, PR y brechas.
 El [prototipo mínimo](docs/harness-prototipo.md) define la siguiente prueba de
 controles antes de decidir una fase managed.
+Las [instrucciones de reproducción](docs/reproducir-gobernanza.md) usan un
+remoto Git exclusivamente local.
 
 No guardar tokens, perfiles ni credenciales en Git. Esta demo no despliega bundles ni ejecuta jobs. La conexión OAuth integrada de Omnigent no está activa en la instancia local actual; Git y Databricks CLI usan la identidad del host.
 
