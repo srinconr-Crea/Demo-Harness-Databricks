@@ -1,0 +1,158 @@
+# Databricks notebook source
+
+# MAGIC %md
+# MAGIC # Evaluate — harness
+# MAGIC
+# MAGIC Runs evaluation against the agent, compares challenger vs champion,
+# MAGIC and applies gates defined in `gates.yml`.
+
+# COMMAND ----------
+
+# MAGIC %pip install mlflow>=3.10.0 databricks-agents>=1.9.3 pyyaml
+# MAGIC %restart_python
+
+# COMMAND ----------
+
+import sys
+from pathlib import Path
+
+EVAL_DIR = Path(__file__).parent if "__file__" in dir() else Path(".")
+AGENT_DIR = EVAL_DIR.parent
+sys.path.insert(0, str(EVAL_DIR))
+sys.path.insert(0, str(AGENT_DIR))
+
+from utils import (
+    load_gates,
+    validate_gates,
+    collect_scorers,
+    find_champion,
+    apply_gates,
+    tag_eval_run,
+)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 1. Load and validate gates
+
+# COMMAND ----------
+
+gates_config = load_gates(EVAL_DIR / "gates.yml")
+
+errors, warnings = validate_gates(gates_config)
+for w in warnings:
+    print(f"WARNING: {w}")
+if errors:
+    for e in errors:
+        print(f"ERROR: {e}")
+    raise ValueError(f"Gates config has {len(errors)} error(s). Fix gates.yml before running evaluation.")
+
+print("Gates config is valid.")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 2. Collect scorers
+
+# COMMAND ----------
+
+scorers = collect_scorers(gates_config)
+print(f"Scorers to run: {[type(s).__name__ for s in scorers]}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 3. Load eval dataset
+
+# COMMAND ----------
+
+import os
+
+catalog = os.environ.get("CATALOG", "")
+schema = os.environ.get("SCHEMA", "")
+eval_table = f"{catalog}.{schema}.harness_eval_dataset"
+
+try:
+    eval_df = spark.table(eval_table).toPandas()
+    print(f"Loaded {len(eval_df)} examples from {eval_table}")
+except Exception as e:
+    print(f"Could not load eval table {eval_table}: {e}")
+    print("Using inline fallback dataset.")
+    import pandas as pd
+    eval_df = pd.DataFrame([
+        {"inputs": {"messages": [{"role": "user", "content": "What is Databricks?"}]}},
+        {"inputs": {"messages": [{"role": "user", "content": "How do I create a cluster?"}]}},
+    ])
+
+eval_df.head()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 4. Run evaluation
+
+# COMMAND ----------
+
+import mlflow
+
+EXPERIMENT_NAME = "/Shared/demo_harness_databricks_harness_eval"
+mlflow.set_experiment(EXPERIMENT_NAME)
+
+from graph import graph
+
+def predict_fn(inputs: dict) -> str:
+    """Invoke the compiled graph synchronously for evaluation."""
+    result = graph.invoke({"messages": inputs.get("messages", [])})
+    return result["messages"][-1].content
+
+results = mlflow.genai.evaluate(
+    data=eval_df,
+    predict_fn=predict_fn,
+    scorers=scorers,
+)
+
+print(f"Run ID: {results.run_id}")
+print(f"Metrics: {results.metrics}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 5. Compare challenger vs champion
+
+# COMMAND ----------
+
+experiment = mlflow.get_experiment_by_name(EXPERIMENT_NAME)
+champion = find_champion(experiment.experiment_id)
+
+if champion is None:
+    print("No champion found — first eval run. Auto-passing.")
+else:
+    print(f"Champion run: {champion['run_id']}")
+
+passed, report = apply_gates(gates_config, results.metrics, champion)
+
+print("=" * 60)
+print("EVALUATION GATE RESULTS")
+print("=" * 60)
+for line in report:
+    print(line)
+print("=" * 60)
+print(f"Result: {'PASSED' if passed else 'FAILED'}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 6. Tag and finalize
+
+# COMMAND ----------
+
+tag_eval_run(results.run_id, passed)
+print(f"Tagged run {results.run_id}: eval_result={'pass' if passed else 'fail'}")
+
+if not passed:
+    raise RuntimeError(
+        "Evaluation gates FAILED. Review the report above. "
+        "The challenger agent does not meet the quality bar for promotion."
+    )
+
+print("All gates passed. Agent is ready for promotion.")

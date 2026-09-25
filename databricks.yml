@@ -1,0 +1,91 @@
+bundle:
+  name: demo_harness_databricks
+  engine: direct
+
+variables:
+  catalog:
+    description: Unity Catalog for project resources (overridden per target)
+  schema:
+    description: Schema within the catalog for resources, traces, and artifacts
+    default: demo_harness_databricks
+  catalog_storage_root:
+    description: Dedicated managed storage root for the harness catalog
+
+
+include:
+  - ./resources/catalog.yml
+  - ./resources/experiment.yml
+  - ./resources/schemas.yml
+  - ./resources/volumes.yml
+
+
+
+
+
+resources:
+  apps:
+    harness:
+      name: "demo-dbx-harness-mvp"
+      description: "harness agent — demo_harness_databricks"
+      source_code_path: ./src/agents/harness
+      config:
+        command: ["uv", "run", "--no-dev", "python", "app/start_server.py"]
+        env:
+          - name: RUN_STORE_DIR
+            value: /Volumes/${resources.volumes.artifacts.catalog_name}/${resources.volumes.artifacts.schema_name}/${resources.volumes.artifacts.name}/runs
+          - name: GITHUB_APP_ID
+            value: "5075619"
+          - name: GITHUB_INSTALLATION_ID
+            value: "164865183"
+          - name: GITHUB_APP_PRIVATE_KEY
+            value_from: github-private-key
+          - name: HARNESS_WAREHOUSE_ID
+            value_from: sandbox-warehouse
+      resources:
+        - name: github-private-key
+          secret:
+            scope: demo-harness-databricks
+            key: github-app-private-key
+            permission: READ
+        - name: sonnet-five
+          serving_endpoint:
+            name: databricks-claude-sonnet-5
+            permission: CAN_QUERY
+        - name: haiku-four-five
+          serving_endpoint:
+            name: databricks-claude-haiku-4-5
+            permission: CAN_QUERY
+        - name: sandbox-warehouse
+          sql_warehouse:
+            id: 9e696889dea65361
+            permission: CAN_USE
+        - name: run-records-read
+          uc_securable:
+            securable_type: VOLUME
+            securable_full_name: ${resources.volumes.artifacts.catalog_name}.${resources.volumes.artifacts.schema_name}.${resources.volumes.artifacts.name}
+            permission: READ_VOLUME
+        - name: run-records-write
+          uc_securable:
+            securable_type: VOLUME
+            securable_full_name: ${resources.volumes.artifacts.catalog_name}.${resources.volumes.artifacts.schema_name}.${resources.volumes.artifacts.name}
+            permission: WRITE_VOLUME
+
+
+sync:
+  include:
+    - src/agents/**
+  exclude:
+    - src/agents/**/__pycache__/**
+    - src/agents/**/*.pyc
+    - src/agents/**/.venv/**
+    - src/agents/**/.pytest_cache/**
+
+targets:
+  dev:
+    default: true
+    mode: development
+    workspace:
+      host: https://adb-7405606739630987.7.azuredatabricks.net
+    variables:
+      catalog: demo_harness_databricks_dev
+      catalog_storage_root: abfss://demo@demodldb.dfs.core.windows.net/harness/demo_harness_databricks_dev

@@ -1,0 +1,10 @@
+repository: srinconr-Crea/Naturapet_DLH
+base_branch: develop
+allowed_paths:
+  - notebooks/comercial/silver/
+pilot:
+  notebook: notebooks/comercial/silver/04_business_derivations.ipynb
+  table: fact_ventas_cabecera
+  measure: margen_sobre_costo_pct
+  numerator: margen_bruto
+  denominator: costo_total

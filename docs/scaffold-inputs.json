@@ -1,0 +1,11 @@
+{
+  "input_project_name": "demo_harness_databricks",
+  "input_root_dir": "demo_harness_databricks",
+  "input_initial_agent_name": "harness",
+  "input_cloud": "azure",
+  "input_cicd_platform": "github_actions",
+  "input_use_vector_search": "no",
+  "input_use_lakebase": "no",
+  "input_use_uc_functions": "no",
+  "input_eval_dataset_source": "manual"
+}

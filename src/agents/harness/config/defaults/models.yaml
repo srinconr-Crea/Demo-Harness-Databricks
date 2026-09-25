@@ -1,0 +1,15 @@
+analyst: databricks-claude-sonnet-5
+developer: databricks-claude-sonnet-5
+verifier: databricks-claude-haiku-4-5
+pricing:
+  currency: USD
+  source: User-provided Databricks calculator screenshots, Azure US East 2, 2026-09-25
+  # Screenshot totals are for 43,200 input and 43,200 output tokens monthly.
+  # The screenshot's DBU totals and Databricks' 1:5 input/output DBU ratio
+  # imply these approximate USD rates. Verify them against billing records.
+  sonnet_5_input_usd_per_token: 0.000003
+  sonnet_5_output_usd_per_token: 0.000015
+  haiku_4_5_input_usd_per_token: 0.0000015
+  haiku_4_5_output_usd_per_token: 0.0000075
+  sonnet_5_screenshot_month_usd: 0.78
+  haiku_4_5_screenshot_month_usd: 0.39

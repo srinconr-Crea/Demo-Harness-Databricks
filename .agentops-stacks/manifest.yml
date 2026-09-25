@@ -1,0 +1,28 @@
+# AgentOps Stacks plugin recognition marker.
+contract_version: 5
+created_by: cli
+project_name: demo_harness_databricks
+cicd_platform: github_actions
+cloud: azure
+
+# Agent architecture
+framework: langgraph
+eval_dataset_source: manual
+
+# Shared components enabled
+components:
+  vector_search: no
+  lakebase: no
+  uc_functions: no
+
+# Registered agents (add new agents here or via /add-agent skill)
+agents:
+  - name: harness
+
+# Supervisor agent (added via /add-supervisor once you have >1 agent).
+# Routes user queries across the agents above — a custom LangGraph supervisor.
+# See docs/supervisor-patterns.md. None is configured until you add one.
+# supervisor:
+#   type: custom
+#   name: <supervisor_agent_name>
+#   routes: [<agent_a>, <agent_b>]

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Databricks Development Harness</title>
+  <style>
+    :root {font-family:system-ui,sans-serif;color:#172435;background:#f6f8fb}
+    body {max-width:980px;margin:0 auto;padding:2rem}
+    main {background:#fff;border:1px solid #dce3ed;border-radius:14px;padding:2rem;box-shadow:0 10px 30px #1724350d}
+    h1 {margin:0 0 .5rem} p {color:#536477;line-height:1.5}
+    form {display:grid;gap:1rem} label {font-weight:650;display:grid;gap:.35rem}
+    input,textarea {font:inherit;border:1px solid #b9c8d7;border-radius:7px;padding:.7rem;width:100%;box-sizing:border-box}
+    textarea {min-height:6rem;resize:vertical} button {background:#1463a5;border:0;border-radius:7px;color:white;font:inherit;font-weight:650;padding:.85rem 1.25rem;cursor:pointer}
+    button:disabled {opacity:.55;cursor:wait} #result {margin-top:1.5rem;white-space:pre-wrap;word-break:break-word}
+    a {color:#1463a5}
+  </style>
+</head>
+<body><main>
+  <h1>Harness de desarrollo Databricks</h1>
+  <p>Ingresa una historia de usuario. El piloto crea una rama de feature y un PR revisable hacia <code>develop</code>; la aprobación y el despliegue son humanos.</p>
+  <form id="story">
+    <label>ID de HU<input name="id" value="NP-001" required maxlength="64"></label>
+    <label>Título<input name="title" value="Margen sobre costo en Silver comercial" required maxlength="160"></label>
+    <label>Arquitectura<textarea name="architecture" required>Silver comercial, notebook de derivaciones del dominio comercial.</textarea></label>
+    <label>Origen y destino<textarea name="source_target" required>fact_ventas_cabecera en la capa Silver comercial; misma tabla con nueva medida.</textarea></label>
+    <label>Reglas de negocio<textarea name="business_rules" required>margen_sobre_costo_pct = margen_bruto / costo_total; NULL cuando costo_total es cero o NULL.</textarea></label>
+    <label>Requisitos no funcionales<textarea name="nonfunctional" required>No modificar jobs, catálogos ni datos existentes de NaturaPet. Mantener el cambio idempotente.</textarea></label>
+    <label>Reglas de validación<textarea name="validation" required>Probar margen 20/costo 10 = 2; costo cero = NULL; costo NULL = NULL. Validar sintaxis y diff.</textarea></label>
+    <button type="submit">Ejecutar HU</button>
+  </form>
+  <section id="result" role="status" aria-live="polite"></section>
+</main>
+<script>
+const form=document.getElementById('story'), output=document.getElementById('result');
+form.addEventListener('submit',async event=>{
+  event.preventDefault(); const button=form.querySelector('button'); button.disabled=true;
+  output.textContent='Validando HU…';
+  try {
+    const payload=Object.fromEntries(new FormData(form).entries());
+    const response=await fetch('/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await response.json(); if(!response.ok) throw Error(JSON.stringify(data.detail));
+    const poll=async()=>{
+      const res=await fetch('/runs/'+data.run_id); const run=await res.json();
+      output.textContent='Estado: '+run.state+(run.error?'\n'+run.error:'');
+      if(run.state==='complete') {
+        const url=run.result?.pr_url;
+        if(url && url.startsWith('https://github.com/')) { const link=document.createElement('a');link.href=url;link.textContent='Abrir PR';link.target='_blank';link.rel='noopener noreferrer';output.append('\n',link); }
+        button.disabled=false;
+      } else if(run.state==='failed') button.disabled=false;
+      else setTimeout(poll,2000);
+    }; await poll();
+  } catch(error) {output.textContent='Error: '+error.message;button.disabled=false;}
+});
+</script></body></html>

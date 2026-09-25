@@ -1,0 +1,7 @@
+command: ["uv", "run", "--no-dev", "python", "app/start_server.py"]
+
+env:
+  - name: GITHUB_APP_PRIVATE_KEY
+    valueFrom: github-private-key
+  - name: HARNESS_WAREHOUSE_ID
+    valueFrom: sandbox-warehouse

@@ -1,0 +1,6 @@
+resources:
+  catalogs:
+    harness_catalog:
+      name: ${var.catalog}
+      storage_root: ${var.catalog_storage_root}
+      comment: "Isolated development resources for the Databricks harness"
