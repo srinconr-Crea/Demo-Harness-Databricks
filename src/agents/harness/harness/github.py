@@ -91,6 +91,10 @@ class GitHubAppClient:
         owner = repository.split("/", 1)[0]
         existing = self._request("GET", f"/repos/{repository}/pulls", params={"head": f"{owner}:{branch}", "base": base_branch, "state": "open"})
         if existing:
+            for path, (expected_content, _) in files.items():
+                current_content, _ = self.read_file(path, ref=branch)
+                if current_content != expected_content:
+                    raise ValueError("El PR existente contiene cambios distintos a la HU validada")
             return existing[0]["html_url"]
         ref_path = f"/repos/{repository}/git/ref/heads/{quote(branch, safe='/')}"
         try:

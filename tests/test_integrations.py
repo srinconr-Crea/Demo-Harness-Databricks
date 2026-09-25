@@ -37,3 +37,21 @@ def test_github_rejects_unapproved_repository_and_base_branch():
         client.create_feature_pr("other/repo", "feature/np-001", "develop", "title", "body", "sha", {})
     with pytest.raises(ValueError):
         client.create_feature_pr("srinconr-Crea/Naturapet_DLH", "feature/np-001", "main", "title", "body", "sha", {})
+
+
+def test_existing_pr_only_reused_when_content_matches():
+    class ExistingPR(GitHubAppClient):
+        def _request(self, method, path, **kwargs):
+            assert method == "GET" and path.endswith("/pulls")
+            return [{"html_url": "https://github.com/srinconr-Crea/Naturapet_DLH/pull/123"}]
+
+        def read_file(self, path, *, ref):
+            assert ref == "feature/np-001"
+            return "unexpected content", "sha"
+
+    client = ExistingPR(1, 2, "unused", repository="srinconr-Crea/Naturapet_DLH")
+    with pytest.raises(ValueError, match="PR existente"):
+        client.create_feature_pr(
+            "srinconr-Crea/Naturapet_DLH", "feature/np-001", "develop", "title", "body", "base-sha",
+            {"notebooks/comercial/silver/test.ipynb": ("validated content", "source-sha")},
+        )
