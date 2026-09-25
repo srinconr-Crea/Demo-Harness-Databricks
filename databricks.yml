@@ -78,7 +78,6 @@ sync:
     - src/agents/**/__pycache__/**
     - src/agents/**/*.pyc
     - src/agents/**/.venv/**
-    - src/agents/**/.pytest_cache/**
 
 targets:
   dev:

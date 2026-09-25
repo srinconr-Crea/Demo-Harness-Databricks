@@ -18,6 +18,8 @@ cliente requieren revisión humana.
 
 La estructura y el perfil permiten incorporar otros clientes, pero el ejecutor de cambios de este MVP está acotado a la HU piloto de NaturaPet. Para otro caso se debe implementar y probar una estrategia de edición y sus validadores antes de permitir push/PR.
 
+El piloto `NP-001` produjo [NaturaPet PR #6](https://github.com/srinconr-Crea/Naturapet_DLH/pull/6), abierto y pendiente de revisión humana. La [evidencia de validación](docs/pilot/validacion.md) incluye el diff, costo estimado y límites de pruebas. La App y el warehouse quedaron detenidos.
+
 ## Estructura
 
 | Ruta | Función |

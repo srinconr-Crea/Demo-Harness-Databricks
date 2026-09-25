@@ -38,13 +38,25 @@ class ModelClient:
             },
         )
         choices = result.get("choices") or []
-        if not choices or not choices[0].get("message", {}).get("content"):
+        content = choices[0].get("message", {}).get("content") if choices else None
+        if isinstance(content, str):
+            answer = content
+        elif isinstance(content, list):
+            answer = "\n".join(
+                block["text"] for block in content
+                if isinstance(block, dict)
+                and block.get("type") in {"text", "output_text"}
+                and isinstance(block.get("text"), str)
+            )
+        else:
+            answer = ""
+        if not answer.strip():
             raise ValueError(f"Respuesta vacía del modelo {model}")
         usage = result.get("usage") or {}
         input_tokens = usage.get("prompt_tokens")
         output_tokens = usage.get("completion_tokens")
         rates = self.prices.get(model)
         cost = estimate_cost(input_tokens, output_tokens, *rates) if rates else None
-        response = ModelResponse(choices[0]["message"]["content"], model, input_tokens, output_tokens, cost)
+        response = ModelResponse(answer, model, input_tokens, output_tokens, cost)
         self.calls.append(response)
         return response

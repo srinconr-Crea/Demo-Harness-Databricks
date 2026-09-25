@@ -44,6 +44,7 @@ form.addEventListener('submit',async event=>{
       const res=await fetch('/runs/'+data.run_id); const run=await res.json();
       output.textContent='Estado: '+run.state+(run.error?'\n'+run.error:'');
       if(run.state==='complete') {
+        output.textContent='Estado: complete\nRama: '+run.result.branch+'\nPrueba remota: '+run.result.remote_check+'\nCosto estimado de modelos: USD '+(run.result.model_cost_usd ?? 'no disponible')+'\nRevisión humana pendiente.';
         const url=run.result?.pr_url;
         if(url && url.startsWith('https://github.com/')) { const link=document.createElement('a');link.href=url;link.textContent='Abrir PR';link.target='_blank';link.rel='noopener noreferrer';output.append('\n',link); }
         button.disabled=false;

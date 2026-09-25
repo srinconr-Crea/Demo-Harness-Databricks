@@ -31,6 +31,14 @@ def test_model_usage_missing_is_not_zero():
     assert client.complete("verifier", "Revisa").cost_usd is None
 
 
+def test_model_normalizes_text_blocks_from_foundation_api():
+    api = FakeWorkspaceAPI({"choices": [{"message": {"content": [
+        {"type": "text", "text": '{"valid": true}'},
+    ]}}], "usage": {"prompt_tokens": 1, "completion_tokens": 2}})
+    client = ModelClient(api, {"analyst": "databricks-claude-sonnet-5"}, {})
+    assert client.complete("analyst", "Analiza").text == '{"valid": true}'
+
+
 def test_github_rejects_unapproved_repository_and_base_branch():
     client = GitHubAppClient(5075619, 164865183, "not-a-real-key", repository="srinconr-Crea/Naturapet_DLH")
     with pytest.raises(ValueError):

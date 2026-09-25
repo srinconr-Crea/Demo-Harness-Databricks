@@ -7,7 +7,7 @@
 - Catálogo propio: `demo_harness_databricks_dev`, con esquema y volumen gestionados por el bundle.
 - SQL warehouse aislado: `demo-harness-sandbox-wh` (`9e696889dea65361`).
 - GitHub App: `naturapet-databricks-harness-mvp` (App ID `5075619`, Installation ID `164865183`), instalada solo en `srinconr-Crea/Naturapet_DLH`.
-- Secret scope: `demo-harness-databricks`, clave `github-app-private-key`. El valor real debe ser la clave PEM de la GitHub App; nunca se versiona.
+- Secret scope: `demo-harness-databricks`, clave `github-app-private-key`. Contiene la clave PEM de la GitHub App; nunca se versiona.
 
 El bundle de desarrollo se despliega con `databricks bundle deploy -t dev --profile CREA_DEV`. Después se publica el código de la App con `databricks bundle run harness -t dev --profile CREA_DEV`. Para detenerla: `databricks apps stop demo-dbx-harness-mvp --profile CREA_DEV`. El archivo `iniciar-harness.bat` vuelve a encenderla y abre su URL.
 
@@ -23,7 +23,7 @@ Las capturas del calculador de Databricks muestran, en Azure US East 2 y bajo un
 
 ## GitHub App y secreto
 
-La GitHub App usa un token de instalación de corta duración. Su clave privada se carga al secreto `github-app-private-key` por stdin, nunca como argumento de comando, archivo del repo o variable versionada. No ejecutes la HU hasta cargar una clave válida. La App solicita permisos `Contents` y `Pull requests` de lectura/escritura, y `Metadata` de lectura. No tiene webhooks y solo está instalada en NaturaPet.
+La GitHub App usa un token de instalación de corta duración. Su clave privada se cargó al secreto `github-app-private-key` por stdin, sin imprimirla ni versionarla. Al renovar la clave, conserva el mismo procedimiento. La App solicita permisos `Contents` y `Pull requests` de lectura/escritura, y `Metadata` de lectura. No tiene webhooks y solo está instalada en NaturaPet.
 
 ## Incorporar otro proyecto
 

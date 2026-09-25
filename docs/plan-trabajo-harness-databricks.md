@@ -1,7 +1,7 @@
 # Plan de trabajo: harness de desarrollo para Databricks
 
 **Fecha de revisión:** 2026-09-25
-**Estado:** decisiones aprobadas; scaffold y MVP implementados en la rama local `MVP-Databricks-Harness`. La App y los recursos aislados del harness están desplegados. Aún falta la clave privada de la GitHub App para ejecutar el piloto y crear el PR de NaturaPet.
+**Estado:** scaffold y MVP publicados en `MVP-Databricks-Harness`. La HU piloto creó [NaturaPet PR #6](https://github.com/srinconr-Crea/Naturapet_DLH/pull/6) hacia `develop`, abierto y sin merge. La App y el warehouse aislado están detenidos. La revisión humana y los checks de CI del cliente quedan pendientes.
 
 Este documento registra el plan original. La implementación y sus límites actuales se describen en [`operacion.md`](operacion.md). Las secciones siguientes que usan el futuro expresan la arquitectura objetivo y no implican que cada capacidad ya esté implementada.
 

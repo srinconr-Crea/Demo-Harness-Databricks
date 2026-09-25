@@ -1,20 +1,22 @@
-# Evidencia del piloto NP-001 (preparación)
+# Evidencia del piloto NP-001
 
-**Estado:** la ejecución de extremo a extremo y el PR de NaturaPet están pendientes de cargar la clave privada de la GitHub App en el secreto `demo-harness-databricks/github-app-private-key`. El secreto contiene temporalmente un marcador inválido; no hay PR del piloto.
+**Resultado:** el harness abrió [NaturaPet PR #6](https://github.com/srinconr-Crea/Naturapet_DLH/pull/6) hacia `develop`, con origen `feature/np-001-margen-sobre-costo-en-silver-comercial`. El PR permanece abierto y sin merge. La App y el warehouse aislado quedaron detenidos tras la prueba.
 
-## Verificaciones realizadas
+## Cambio y controles
 
-- Se clonó `develop` de NaturaPet en una carpeta temporal de lectura, sin modificar su repositorio. El editor produjo una única línea nueva en `notebooks/comercial/silver/04_business_derivations.ipynb`; el diff unificado tuvo 10 líneas y la celda resultante compiló como Python. La medida apareció exactamente una vez.
-- El SQL warehouse aislado `demo-harness-sandbox-wh` ejecutó tres filas sintéticas: costo 10 y margen 20 dio 2; costo cero y costo NULL dieron NULL. La consulta terminó `SUCCEEDED` (statement `01f1b8fa-1f0b-126b-b35c-495070b05af7`). No usó tablas ni DDL de NaturaPet.
-- Sonnet 5 respondió una invocación mínima con 22 tokens de entrada y 9 de salida. Haiku 4.5 respondió con 18 de entrada y 13 de salida. El endpoint Sonnet 5 rechazó `temperature`; el cliente del harness ya omite ese parámetro. Haiku devolvió JSON en bloque Markdown; el parser acepta ese formato.
-- La App arrancó en Databricks, mostró el formulario único y guardó una ejecución de prueba en el volumen UC mediante Files API. La ejecución de prueba fue rechazada deliberadamente por no corresponder a la medida piloto. Después de verificar el arranque, la App quedó detenida. El warehouse aislado también quedó detenido.
-- El commit `3325c944ff59affade21c1398fbc70aa480bcaab` está publicado en la rama `MVP-Databricks-Harness`. La suite local cerró con 20 pruebas aprobadas, lint aprobado y `databricks bundle validate` aprobado.
+- El commit base fue `9c48831022a329902f765058de37e6d0a1528eb7`; el commit de la rama feature es `9626fa0e932e9bc389e2c78973b01f834873d3db`.
+- GitHub confirma un solo archivo modificado: `notebooks/comercial/silver/04_business_derivations.ipynb`, con **1 adición y 0 eliminaciones**. La nueva columna es `margen_sobre_costo_pct = safe_divide(margen_bruto, costo_total)` junto a `margen_pct` en `fact_ventas_cabecera`.
+- Antes de publicar, el editor validó sintaxis Python, unicidad de la medida y la expresión exacta. Sobre una copia temporal de `develop` el diff unificado tuvo 10 líneas y solo una línea nueva de código.
+- El registro persistente de la ejecución `NP-001` indica `remote_check: passed`: tres filas sintéticas en `demo-harness-sandbox-wh` produjeron 2 para margen 20/costo 10, NULL para costo cero y NULL para costo NULL. El SQL no usó tablas ni DDL de NaturaPet.
+- Analista y desarrollador usaron `databricks-claude-sonnet-5`; el verificador usó `databricks-claude-haiku-4-5`. Una primera ejecución se detuvo antes de crear rama por una respuesta de Sonnet en bloques; el cliente fue corregido y el reintento completó el flujo.
+- GitHub muestra **0 checks** para este PR hacia `develop` y ningún despliegue de esa rama. La validación remota comprueba la fórmula SQL equivalente; **no ejecuta el notebook PySpark completo**. La aprobación y el merge siguen siendo humanos.
 
-Con las tarifas aproximadas inferidas de las capturas, las dos invocaciones mínimas costarían unos USD 0,0003255 en conjunto. Es una estimación de diagnóstico; el costo de una HU real y el de App/warehouse se medirán después.
+## Costos y verificaciones
 
-## Pendientes para cerrar el piloto
+El registro del intento exitoso estima **USD 0,0559425** por las tres llamadas a modelos, usando las tarifas aproximadas inferidas de las capturas del calculador de Databricks. Esta cifra no incluye la llamada del intento fallido, invocaciones diagnósticas, App ni warehouse. Para conocer el costo facturado total hay que consultar la telemetría de Databricks.
 
-1. Cargar el PEM auténtico de la GitHub App en el secreto del harness sin versionarlo ni imprimirlo.
-2. Encender la App, enviar la HU precargada y verificar las tres llamadas a modelos, la prueba remota, la rama `feature/*` y el PR hacia `develop`.
-3. Revisar el diff y los checks del PR. El SQL remoto comprueba la fórmula, pero no ejecuta el notebook PySpark completo; la revisión humana debe tenerlo presente.
-4. Volver a detener la App y el warehouse después de la ejecución.
+La suite local termina con **21 pruebas aprobadas**; lint y `databricks bundle validate -t dev` también aprobaron. Se verificó que el PEM autentica la GitHub App y que su instalación puede leer `develop` del único repositorio permitido. La clave está en el secreto de Databricks y no se versionó.
+
+## Revisión humana pendiente
+
+Revisar el [diff y los criterios de aceptación del PR #6](https://github.com/srinconr-Crea/Naturapet_DLH/pull/6/changes), decidir si se requiere una ejecución PySpark o un check de CI adicional y aprobar o solicitar ajustes. El harness no hará merge ni desplegará el cambio de NaturaPet.
