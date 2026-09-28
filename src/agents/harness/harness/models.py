@@ -2,10 +2,28 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
+from pathlib import Path
+
+import yaml
 
 from .contracts import estimate_cost
+
+
+def load_model_config(path: str | Path) -> tuple[dict[str, str], dict[str, tuple[Decimal, Decimal]], str]:
+    config = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    routing = config["routing"]
+    if set(routing) != {"analyst", "developer", "verifier"}:
+        raise ValueError("La configuración de modelos requiere los tres roles")
+    prices = {
+        endpoint: (Decimal(str(rates["input_usd_per_token"])), Decimal(str(rates["output_usd_per_token"])))
+        for endpoint, rates in config["pricing"]["endpoints"].items()
+    }
+    if not set(routing.values()).issubset(prices):
+        raise ValueError("Faltan tarifas configuradas para un endpoint permitido")
+    return routing, prices, str(config["pricing"]["source"])
 
 
 @dataclass(frozen=True)
@@ -18,11 +36,12 @@ class ModelResponse:
 
 
 class ModelClient:
-    def __init__(self, api, routing: dict[str, str], prices: dict[str, tuple[Decimal, Decimal]]):
+    def __init__(self, api, routing: dict[str, str], prices: dict[str, tuple[Decimal, Decimal]], on_call: Callable[[str, ModelResponse], None] | None = None):
         self.api = api
         self.routing = routing
         self.prices = prices
         self.calls: list[ModelResponse] = []
+        self.on_call = on_call
 
     def complete(self, role: str, prompt: str, *, max_tokens: int = 2000) -> ModelResponse:
         model = self.routing[role]
@@ -59,4 +78,6 @@ class ModelClient:
         cost = estimate_cost(input_tokens, output_tokens, *rates) if rates else None
         response = ModelResponse(answer, model, input_tokens, output_tokens, cost)
         self.calls.append(response)
+        if self.on_call:
+            self.on_call(role, response)
         return response

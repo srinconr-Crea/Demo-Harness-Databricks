@@ -18,12 +18,14 @@ class GitHubAppClient:
         private_key: str,
         *,
         repository: str,
+        base_branch: str,
         http: httpx.Client | None = None,
     ):
         self.app_id = app_id
         self.installation_id = installation_id
         self.private_key = private_key
         self.repository = repository
+        self.base_branch = base_branch
         self.http = http or httpx.Client(base_url="https://api.github.com", timeout=30)
         self._token: str | None = None
         self._expires_at = 0.0
@@ -63,8 +65,8 @@ class GitHubAppClient:
             raise ValueError("Repositorio fuera de la instalación autorizada")
 
     def base_sha(self, base_branch: str) -> str:
-        if base_branch != "develop":
-            raise ValueError("La rama base aprobada es develop")
+        if base_branch != self.base_branch:
+            raise ValueError("La rama base no coincide con el perfil autorizado")
         data = self._request("GET", f"/repos/{self.repository}/git/ref/heads/{base_branch}")
         return data["object"]["sha"]
 
@@ -74,6 +76,14 @@ class GitHubAppClient:
         if data.get("type") != "file":
             raise ValueError("La ruta solicitada no es un archivo")
         return base64.b64decode(data["content"]).decode("utf-8"), data["sha"]
+
+    def _verify_branch_diff(self, repository: str, branch: str, base_sha: str, files: dict[str, tuple[str, str]]) -> None:
+        comparison = self._request("GET", f"/repos/{repository}/compare/{base_sha}...{quote(branch, safe='/')}")
+        if comparison.get("merge_base_commit", {}).get("sha") != base_sha:
+            raise ValueError("La rama feature no nació del commit base validado")
+        changed = {item.get("filename") for item in comparison.get("files", [])}
+        if changed != set(files):
+            raise ValueError("La rama feature contiene archivos adicionales o faltantes")
 
     def create_feature_pr(
         self,
@@ -86,11 +96,14 @@ class GitHubAppClient:
         files: dict[str, tuple[str, str]],
     ) -> str:
         self._check_repo(repository)
-        if base_branch != "develop" or not branch.startswith("feature/") or ".." in branch:
+        if base_branch != self.base_branch or not branch.startswith("feature/") or ".." in branch:
             raise ValueError("Rama Git fuera de política")
+        if not files or any(path.startswith(("/", ".github/")) or ".." in path.split("/") for path in files):
+            raise ValueError("Ruta de publicación fuera de política")
         owner = repository.split("/", 1)[0]
         existing = self._request("GET", f"/repos/{repository}/pulls", params={"head": f"{owner}:{branch}", "base": base_branch, "state": "open"})
         if existing:
+            self._verify_branch_diff(repository, branch, base_sha, files)
             for path, (expected_content, _) in files.items():
                 current_content, _ = self.read_file(path, ref=branch)
                 if current_content != expected_content:
@@ -105,6 +118,7 @@ class GitHubAppClient:
             self._request("POST", f"/repos/{repository}/git/refs", json={"ref": f"refs/heads/{branch}", "sha": base_sha})
         else:
             if ref["object"]["sha"] != base_sha:
+                self._verify_branch_diff(repository, branch, base_sha, files)
                 if len(files) != 1:
                     raise ValueError("La rama feature existente divergió del commit base")
                 only_path, (expected_content, _) = next(iter(files.items()))
@@ -114,8 +128,6 @@ class GitHubAppClient:
                 pr = self._request("POST", f"/repos/{repository}/pulls", json={"title": title, "head": branch, "base": base_branch, "body": body, "draft": False})
                 return pr["html_url"]
         for path, (content, source_sha) in files.items():
-            if path.startswith(("/", ".github/")) or ".." in path.split("/"):
-                raise ValueError("Ruta de publicación fuera de política")
             self._request(
                 "PUT", f"/repos/{repository}/contents/{quote(path, safe='/')}",
                 json={

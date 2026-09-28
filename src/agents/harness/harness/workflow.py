@@ -1,4 +1,4 @@
-"""Fail-closed pilot workflow: read, analyze, edit, validate, review, PR."""
+"""Fail-closed workflow for configured, deterministic edit strategies."""
 
 from __future__ import annotations
 
@@ -7,15 +7,8 @@ import json
 from dataclasses import dataclass
 from decimal import Decimal
 
-from .contracts import ClientProfile, Story
-from .notebook_edit import (
-    EXPRESSION,
-    MEASURE,
-    apply_pilot_measure,
-    extract_pilot_source,
-)
-
-DEFAULT_NOTEBOOK = "notebooks/comercial/silver/04_business_derivations.ipynb"
+from .contracts import ClientProfile, Story, parse_ratio_story
+from .notebook_edit import apply_safe_ratio, extract_target_source
 
 
 @dataclass(frozen=True)
@@ -24,6 +17,7 @@ class RunReport:
     base_sha: str
     branch: str
     pr_url: str
+    changed_files: list[str]
     diff: str
     model_cost_usd: Decimal | None
     remote_check: str
@@ -46,31 +40,33 @@ def _json_response(models, role: str, prompt: str) -> dict:
 
 
 def run_story(story: Story, profile: ClientProfile, github, models, sandbox_verify) -> RunReport:
-    path = profile.pilot.get("notebook", DEFAULT_NOTEBOOK)
+    strategy = profile.strategy
+    if strategy is None or strategy.kind != "silver_safe_ratio":
+        raise ValueError("No existe un editor validado para este perfil")
+    path = strategy.notebook
     if not profile.allows(path):
         raise ValueError("El notebook queda fuera de las rutas permitidas")
-    if profile.base_branch != "develop":
-        raise ValueError("El piloto exige base develop")
-    if not all(term in story.business_rules for term in ("margen_bruto", "costo_total")):
-        raise ValueError("La HU no describe la medida aprobada para este piloto")
+    spec = parse_ratio_story(story, profile)
     branch = profile.feature_branch(story)
     base_sha = github.base_sha(profile.base_branch)
-    original, source_sha = github.read_file(path, ref=profile.base_branch)
-    original_source = extract_pilot_source(original)
-    analyst = _json_response(models, "analyst", json.dumps({"task": "Confirma que la HU afecta únicamente la medida indicada; responde valid y notes", "story": story.model_dump(), "path": path, "source_excerpt": original_source[:12000]}, ensure_ascii=False))
+    original, source_sha = github.read_file(path, ref=base_sha)
+    original_source = extract_target_source(original, strategy)
+    analyst = _json_response(models, "analyst", json.dumps({"task": "Confirma que la HU pide una sola razón segura en el notebook configurado; responde valid y notes", "story": story.model_dump(), "path": path, "source_excerpt": original_source[:12000]}, ensure_ascii=False))
     if analyst.get("valid") is not True:
         raise ValueError("El analista no aprobó el alcance de la HU")
-    developer = _json_response(models, "developer", json.dumps({"task": "Propón la expresión Python exacta de margen_sobre_costo_pct como expression; no cambies otros campos", "story": story.model_dump(), "source_excerpt": original_source[:12000]}, ensure_ascii=False))
-    if developer.get("expression") != EXPRESSION:
-        raise ValueError("La expresión propuesta no coincide con la regla aprobada")
-    updated = apply_pilot_measure(original)
-    updated_source = extract_pilot_source(updated)
+    developer = _json_response(models, "developer", json.dumps({"task": "Confirma la expresión Python exacta como expression; no cambies otros campos", "story": story.model_dump(), "expected_expression": spec.expression, "source_excerpt": original_source[:12000]}, ensure_ascii=False))
+    if developer.get("expression") != spec.expression:
+        raise ValueError("La expresión propuesta no coincide con la regla validada")
+    updated = apply_safe_ratio(original, strategy, spec)
+    updated_source = extract_target_source(updated, strategy)
     compile(updated_source, path, "exec")
-    if updated_source.count(f".withColumn('{MEASURE}', {EXPRESSION})") != 1:
+    if updated_source.count(f".withColumn('{spec.output_column}', {spec.expression})") != 1:
         raise ValueError("La edición no cumple el contrato Silver")
-    if not sandbox_verify(updated_source):
+    if not sandbox_verify(spec):
         raise ValueError("Falló la validación remota en sandbox")
     diff = "\n".join(difflib.unified_diff(original.splitlines(), updated.splitlines(), fromfile=path, tofile=path, lineterm=""))
+    if not diff:
+        raise ValueError("La HU no produjo un cambio nuevo frente a la rama base")
     verifier = _json_response(models, "verifier", json.dumps({"task": "Revisa el diff y las pruebas. Responde approved boolean y notes", "story": story.model_dump(), "diff": diff, "remote_check": "three synthetic SQL rows: positive, zero, NULL passed"}, ensure_ascii=False))
     if verifier.get("approved") is not True:
         raise ValueError("El verificador rechazó el cambio")
@@ -79,10 +75,11 @@ def run_story(story: Story, profile: ClientProfile, github, models, sandbox_veri
     body = (
         f"## HU {story.id}\n{story.title}\n\n"
         f"- Rama base: `{profile.base_branch}` @ `{base_sha}`\n"
-        f"- Cambio: `{MEASURE} = margen_bruto / costo_total`, NULL para costo cero o NULL.\n"
-        "- Gates: sintaxis Python, expresión exacta, prueba remota con tres filas sintéticas y revisión Haiku.\n"
+        f"- Cambio: `{spec.output_column} = {spec.numerator} / {spec.denominator}`, NULL para denominador cero o NULL.\n"
+        "- Gates: sintaxis Python, expresión exacta, prueba remota con tres filas sintéticas y revisión de modelo.\n"
+        "- Límite: la prueba SQL no ejecuta el notebook PySpark completo.\n"
         f"- Costo estimado de modelos: {model_cost if model_cost is not None else 'uso no reportado'} USD.\n"
-        "- Validación humana pendiente; sin merge ni despliegue de NaturaPet.\n"
+        "- Validación humana pendiente; sin merge ni despliegue del cliente.\n"
     )
     pr_url = github.create_feature_pr(profile.repository, branch, profile.base_branch, story.title, body, base_sha, {path: (updated, source_sha)})
-    return RunReport(story.id, base_sha, branch, pr_url, diff, model_cost, "passed")
+    return RunReport(story.id, base_sha, branch, pr_url, [path], diff, model_cost, "passed")

@@ -4,56 +4,60 @@ from __future__ import annotations
 
 import os
 import sys
+import uuid
 from dataclasses import asdict
-from decimal import Decimal
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import uvicorn
-import yaml
 from databricks.sdk import WorkspaceClient
-from harness.contracts import Story, load_profile
+from harness.contracts import AgentCallContract, Story, load_client_profile
 from harness.github import GitHubAppClient
-from harness.models import ModelClient
-from harness.sandbox import verify_silver_rule
-from harness.store import VolumeRunStore
+from harness.models import ModelClient, load_model_config
+from harness.sandbox import verify_safe_ratio
+from harness.store import LocalRunStore, VolumeRunStore
 from harness.webapp import create_app
 from harness.workflow import run_story
 
-PROFILE = load_profile(ROOT / "config" / "clients" / "naturapet.yaml")
-MODELS = yaml.safe_load((ROOT / "config" / "defaults" / "models.yaml").read_text(encoding="utf-8"))
+PROFILE = load_client_profile(ROOT / "config" / "clients", os.environ.get("HARNESS_CLIENT_PROFILE", "naturapet"))
+ROUTING, PRICES, PRICING_SOURCE = load_model_config(ROOT / "config" / "defaults" / "models.yaml")
+run_directory = os.environ.get("RUN_STORE_DIR")
+store = VolumeRunStore(WorkspaceClient().files, run_directory) if run_directory else LocalRunStore(ROOT / ".runs")
 
 
-def execute_story(story: Story) -> dict:
+def execute_story(story: Story, run_id: str, attempt_id: str) -> dict:
+    if PROFILE.github_app_id is None or PROFILE.github_installation_id is None:
+        raise ValueError("El perfil no configura la GitHub App")
     private_key = os.environ["GITHUB_APP_PRIVATE_KEY"].replace("\\n", "\n")
     github = GitHubAppClient(
-        int(os.environ["GITHUB_APP_ID"]),
-        int(os.environ["GITHUB_INSTALLATION_ID"]),
+        PROFILE.github_app_id,
+        PROFILE.github_installation_id,
         private_key,
         repository=PROFILE.repository,
+        base_branch=PROFILE.base_branch,
     )
     workspace = WorkspaceClient()
-    pricing = MODELS["pricing"]
-    rates = {
-        MODELS["analyst"]: (
-            Decimal(str(pricing["sonnet_5_input_usd_per_token"])),
-            Decimal(str(pricing["sonnet_5_output_usd_per_token"])),
-        ),
-        MODELS["verifier"]: (
-            Decimal(str(pricing["haiku_4_5_input_usd_per_token"])),
-            Decimal(str(pricing["haiku_4_5_output_usd_per_token"])),
-        ),
-    }
-    models = ModelClient(workspace.api_client, {role: MODELS[role] for role in ("analyst", "developer", "verifier")}, rates)
-    report = run_story(story, PROFILE, github, models, lambda source: verify_silver_rule(workspace.api_client, os.environ["HARNESS_WAREHOUSE_ID"]))
+
+    def save_call(role, response) -> None:
+        call_id = uuid.uuid4().hex
+        record = AgentCallContract(
+            call_id=call_id, run_id=run_id, attempt_id=attempt_id, story_id=story.id,
+            role=role, model=response.model, response=response.text,
+            completed_at=datetime.now(timezone.utc), input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens, estimated_cost_usd=response.cost_usd,
+            pricing_source=PRICING_SOURCE,
+        )
+        store.save_agent_call(run_id, call_id, record.model_dump(mode="json"))
+
+    models = ModelClient(workspace.api_client, ROUTING, PRICES, on_call=save_call)
+    report = run_story(story, PROFILE, github, models, lambda spec: verify_safe_ratio(workspace.api_client, os.environ["HARNESS_WAREHOUSE_ID"], spec))
     return asdict(report)
 
 
-run_directory = os.environ.get("RUN_STORE_DIR")
-store = VolumeRunStore(WorkspaceClient().files, run_directory) if run_directory else ROOT / ".runs"
-app = create_app(store, execute_story)
+app = create_app(store, execute_story, PROFILE)
 
 
 if __name__ == "__main__":

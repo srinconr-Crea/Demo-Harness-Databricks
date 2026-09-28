@@ -5,31 +5,55 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Databricks Development Harness</title>
   <style>
-    :root {font-family:system-ui,sans-serif;color:#172435;background:#f6f8fb}
-    body {max-width:980px;margin:0 auto;padding:2rem}
-    main {background:#fff;border:1px solid #dce3ed;border-radius:14px;padding:2rem;box-shadow:0 10px 30px #1724350d}
-    h1 {margin:0 0 .5rem} p {color:#536477;line-height:1.5}
-    form {display:grid;gap:1rem} label {font-weight:650;display:grid;gap:.35rem}
-    input,textarea {font:inherit;border:1px solid #b9c8d7;border-radius:7px;padding:.7rem;width:100%;box-sizing:border-box}
-    textarea {min-height:6rem;resize:vertical} button {background:#1463a5;border:0;border-radius:7px;color:white;font:inherit;font-weight:650;padding:.85rem 1.25rem;cursor:pointer}
-    button:disabled {opacity:.55;cursor:wait} #result {margin-top:1.5rem;white-space:pre-wrap;word-break:break-word}
-    a {color:#1463a5}
+    :root {font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#182640;background:#f3f6fb;font-synthesis:none}
+    * {box-sizing:border-box}
+    body {min-height:100vh;max-width:1100px;margin:0 auto;padding:clamp(1rem,4vw,3rem);background:radial-gradient(circle at 8% 0%,#dbeafe 0,transparent 34%),radial-gradient(circle at 100% 15%,#e2e8f9 0,transparent 30%)}
+    main {overflow:hidden;background:#fff;border:1px solid #e0e7f1;border-radius:24px;box-shadow:0 24px 70px #20365b14}
+    .hero {padding:clamp(1.5rem,4vw,3rem);background:linear-gradient(120deg,#142d52,#205a85);color:#fff}
+    .eyebrow {margin:0 0 .7rem;color:#a9d8fb;font-size:.78rem;font-weight:750;letter-spacing:.13em;text-transform:uppercase}
+    h1 {max-width:740px;margin:0 0 .7rem;font-size:clamp(1.8rem,3.5vw,2.65rem);line-height:1.12;letter-spacing:-.035em}
+    .hero p {max-width:760px;margin:0;color:#d9e9f7;line-height:1.6}
+    .content {padding:clamp(1.5rem,4vw,3rem)}
+    .section-title {margin:0 0 1.3rem;font-size:1.05rem;letter-spacing:-.01em}
+    form {display:grid;gap:1.1rem}
+    .row {display:grid;grid-template-columns:1fr 2fr;gap:1.1rem}
+    label {display:grid;gap:.45rem;color:#33445c;font-size:.9rem;font-weight:700}
+    input,textarea {width:100%;border:1px solid #cdd8e6;border-radius:11px;background:#fbfcff;color:#182640;font:inherit;font-weight:400;padding:.85rem .95rem;transition:border-color .18s,box-shadow .18s}
+    input::placeholder,textarea::placeholder {color:#8898ac}
+    input:focus,textarea:focus {outline:0;border-color:#3183c1;box-shadow:0 0 0 4px #3183c126}
+    textarea {min-height:6.3rem;resize:vertical}
+    button {justify-self:start;margin-top:.35rem;background:#176cac;border:0;border-radius:11px;color:#fff;font:inherit;font-weight:700;padding:.9rem 1.4rem;box-shadow:0 9px 20px #176cac32;cursor:pointer;transition:background .18s,transform .18s}
+    button:hover:not(:disabled) {background:#105989;transform:translateY(-1px)}
+    button:focus-visible {outline:3px solid #8bc8ef;outline-offset:3px}
+    button:disabled {opacity:.58;cursor:wait;box-shadow:none}
+    #result {margin-top:1.6rem;padding:1.1rem 1.3rem;border:1px solid #d8e8f4;border-radius:12px;background:#f3f9fd;color:#26445e;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+    #result:empty {display:none}
+    a {color:#0f659f;font-weight:700}
+    @media (max-width:640px) {.row {grid-template-columns:1fr} .hero,.content {padding:1.5rem} button {width:100%}}
   </style>
 </head>
 <body><main>
-  <h1>Harness de desarrollo Databricks</h1>
-  <p>Ingresa una historia de usuario. El piloto crea una rama de feature y un PR revisable hacia <code>develop</code>; la aprobación y el despliegue son humanos.</p>
+  <header class="hero">
+    <p class="eyebrow">Desarrollo controlado · Databricks</p>
+    <h1>De historia de usuario a pull request</h1>
+    <p>Describe el cambio para el proyecto configurado. El harness analiza la HU, valida el resultado en un entorno aislado y prepara un PR para revisión humana.</p>
+  </header>
+  <div class="content">
+  <h2 class="section-title">Nueva historia de usuario</h2>
   <form id="story">
-    <label>ID de HU<input name="id" value="NP-001" required maxlength="64"></label>
-    <label>Título<input name="title" value="Margen sobre costo en Silver comercial" required maxlength="160"></label>
-    <label>Arquitectura<textarea name="architecture" required>Silver comercial, notebook de derivaciones del dominio comercial.</textarea></label>
-    <label>Origen y destino<textarea name="source_target" required>fact_ventas_cabecera en la capa Silver comercial; misma tabla con nueva medida.</textarea></label>
-    <label>Reglas de negocio<textarea name="business_rules" required>margen_sobre_costo_pct = margen_bruto / costo_total; NULL cuando costo_total es cero o NULL.</textarea></label>
-    <label>Requisitos no funcionales<textarea name="nonfunctional" required>No modificar jobs, catálogos ni datos existentes de NaturaPet. Mantener el cambio idempotente.</textarea></label>
-    <label>Reglas de validación<textarea name="validation" required>Probar margen 20/costo 10 = 2; costo cero = NULL; costo NULL = NULL. Validar sintaxis y diff.</textarea></label>
+    <div class="row">
+      <label>ID de HU<input name="id" required maxlength="64" placeholder="ID de la historia"></label>
+      <label>Título<input name="title" required maxlength="160" placeholder="Título de la historia"></label>
+    </div>
+    <label>Arquitectura<textarea name="architecture" required placeholder="Capa y componente afectado"></textarea></label>
+    <label>Origen y destino<textarea name="source_target" required placeholder="Tabla de origen y destino"></textarea></label>
+    <label>Reglas de negocio<textarea name="business_rules" required placeholder="columna_resultado = numerador / denominador; tratamiento de cero y NULL"></textarea></label>
+    <label>Requisitos no funcionales<textarea name="nonfunctional" required placeholder="Restricciones de alcance e idempotencia"></textarea></label>
+    <label>Reglas de validación<textarea name="validation" required placeholder="Casos esperados y verificaciones"></textarea></label>
     <button type="submit">Ejecutar HU</button>
   </form>
   <section id="result" role="status" aria-live="polite"></section>
+  </div>
 </main>
 <script>
 const form=document.getElementById('story'), output=document.getElementById('result');
@@ -48,7 +72,7 @@ form.addEventListener('submit',async event=>{
         const url=run.result?.pr_url;
         if(url && url.startsWith('https://github.com/')) { const link=document.createElement('a');link.href=url;link.textContent='Abrir PR';link.target='_blank';link.rel='noopener noreferrer';output.append('\n',link); }
         button.disabled=false;
-      } else if(run.state==='failed') button.disabled=false;
+      } else if(run.state==='failed' || run.state==='interrupted') button.disabled=false;
       else setTimeout(poll,2000);
     }; await poll();
   } catch(error) {output.textContent='Error: '+error.message;button.disabled=false;}

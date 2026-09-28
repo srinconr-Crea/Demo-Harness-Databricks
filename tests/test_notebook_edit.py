@@ -1,7 +1,16 @@
 import json
 
 import pytest
-from harness.notebook_edit import apply_pilot_measure, extract_pilot_source
+from harness.contracts import RatioSpec, SafeRatioStrategy
+from harness.notebook_edit import apply_safe_ratio, extract_target_source
+
+
+def strategy():
+    return SafeRatioStrategy(kind="silver_safe_ratio", notebook="notebooks/a.ipynb", table="fact_ventas_cabecera", anchor_column="margen_pct", allowed_source_columns=["margen_bruto", "costo_total", "base_neta_sin_iva"])
+
+
+def measure():
+    return RatioSpec(output_column="costo_sobre_venta_pct", numerator="costo_total", denominator="base_neta_sin_iva")
 
 
 def fixture_notebook():
@@ -19,19 +28,25 @@ def fixture_notebook():
 
 def test_adds_measure_once_without_changing_other_fields():
     original = fixture_notebook()
-    updated = apply_pilot_measure(original)
-    source = extract_pilot_source(updated)
-    assert ".withColumn('margen_sobre_costo_pct', safe_divide(F.col('margen_bruto'), F.col('costo_total')))" in source
-    assert source.count("margen_sobre_costo_pct") == 1
+    updated = apply_safe_ratio(original, strategy(), measure())
+    source = extract_target_source(updated, strategy())
+    assert ".withColumn('costo_sobre_venta_pct', safe_divide(F.col('costo_total'), F.col('base_neta_sin_iva')))" in source
+    assert source.count("costo_sobre_venta_pct") == 1
     assert "tiene_campana" in source
-    assert apply_pilot_measure(updated) == updated
+    assert apply_safe_ratio(updated, strategy(), measure()) == updated
 
 
 def test_missing_target_fails_closed():
     with pytest.raises(ValueError):
-        apply_pilot_measure(fixture_notebook().replace("fact_ventas_cabecera", "other"))
+        apply_safe_ratio(fixture_notebook().replace("fact_ventas_cabecera", "other"), strategy(), measure())
 
 
 def test_pilot_source_compiles():
-    source = extract_pilot_source(apply_pilot_measure(fixture_notebook()))
+    source = extract_target_source(apply_safe_ratio(fixture_notebook(), strategy(), measure()), strategy())
     compile(source, "pilot_notebook", "exec")
+
+
+def test_rejects_conflicting_existing_measure():
+    notebook = fixture_notebook().replace("tiene_campana", "costo_sobre_venta_pct")
+    with pytest.raises(ValueError, match="definición diferente"):
+        apply_safe_ratio(notebook, strategy(), measure())

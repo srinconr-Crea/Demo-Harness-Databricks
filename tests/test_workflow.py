@@ -15,7 +15,7 @@ class FakeGitHub:
         return "abc123"
 
     def read_file(self, path, *, ref):
-        assert ref == "develop"
+        assert ref == "abc123"
         return fixture_notebook(), "file-sha"
 
     def create_feature_pr(self, *args):
@@ -33,7 +33,7 @@ class FakeModel:
         if role == "analyst":
             text = '{"valid": true, "notes": "Medida aditiva"}'
         elif role == "developer":
-            text = '{"expression": "safe_divide(F.col(\'margen_bruto\'), F.col(\'costo_total\'))"}'
+            text = json.dumps({"expression": json.loads(prompt)["expected_expression"]})
         else:
             text = json.dumps({"approved": self.verifier_ok, "notes": "Verificado"})
         return type("Response", (), {"text": text, "cost_usd": None})()
@@ -43,13 +43,13 @@ def story():
     return Story(
         id="NP-001", title="Margen sobre costo en Silver comercial",
         architecture="Silver comercial", source_target="fact_ventas_cabecera",
-        business_rules="margen_bruto / costo_total; NULL para costo 0 o NULL",
+        business_rules="margen_sobre_costo_pct = margen_bruto / costo_total; NULL para costo 0 o NULL",
         nonfunctional="Sin cambios a jobs", validation="Caso positivo, cero y NULL",
     )
 
 
 def profile():
-    return ClientProfile(repository="srinconr-Crea/Naturapet_DLH", base_branch="develop", allowed_paths=["notebooks/comercial/silver/"])
+    return ClientProfile(repository="srinconr-Crea/Naturapet_DLH", base_branch="develop", allowed_paths=["notebooks/comercial/silver/"], strategy={"kind": "silver_safe_ratio", "notebook": "notebooks/comercial/silver/04_business_derivations.ipynb", "table": "fact_ventas_cabecera", "anchor_column": "margen_pct", "allowed_source_columns": ["margen_bruto", "costo_total", "base_neta_sin_iva"]})
 
 
 def test_gate_blocks_publication_when_remote_sandbox_fails():
@@ -66,6 +66,14 @@ def test_success_routes_three_roles_and_opens_pr():
     assert github.published
     assert models.calls == ["analyst", "developer", "verifier"]
     assert report.pr_url.endswith("/999")
+    assert report.changed_files == ["notebooks/comercial/silver/04_business_derivations.ipynb"]
+
+
+def test_second_story_uses_hu_formula_without_code_change():
+    second = story().model_copy(update={"id": "NP-002", "title": "Costo sobre venta neta", "business_rules": "costo_sobre_venta_pct = costo_total / base_neta_sin_iva; NULL si venta neta es cero o NULL"})
+    report = run_story(second, profile(), FakeGitHub(), FakeModel(), lambda spec: spec.output_column == "costo_sobre_venta_pct")
+    assert "costo_sobre_venta_pct" in report.diff
+    assert "margen_sobre_costo_pct" not in report.diff
 
 
 def test_fenced_json_from_verifier_is_accepted():

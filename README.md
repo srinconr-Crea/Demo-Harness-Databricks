@@ -12,13 +12,13 @@ cliente requieren revisión humana.
 - Una Databricks App con un formulario para ID, título y cinco bloques: arquitectura, origen/destino, reglas de negocio, requisitos no funcionales y reglas de validación.
 - Orquestador determinista con roles analista y desarrollador en `databricks-claude-sonnet-5`, y verificador en `databricks-claude-haiku-4-5`. Usa Foundation Model API con pago por token.
 - Integración GitHub App limitada a `srinconr-Crea/Naturapet_DLH`, base `develop`, cambios en rutas permitidas y PR sin merge.
-- Perfil NaturaPet en YAML. El primer cambio implementado es la medida `margen_sobre_costo_pct` en Silver comercial.
+- Perfil NaturaPet en YAML. La estrategia validada añade una razón `columna = numerador / denominador` con `safe_divide` en el notebook Silver comercial autorizado; la medida concreta viene de cada HU.
 - Prueba remota con datos sintéticos en un SQL warehouse nuevo y aislado. Comprueba el cálculo para costo positivo, cero y NULL; **no ejecuta el notebook PySpark completo**.
-- Registro de ejecuciones en un volumen Unity Catalog nuevo, usando Files API. Costos de modelos estimados a partir de tokens reportados y tarifas configurables. Sin tope monetario inicial.
+- Contratos de HU/ejecución y llamadas por agente en el volumen Unity Catalog del harness. `run_id` y `attempt_id` permiten unir las respuestas y costos estimados de modelos. Sin tope monetario inicial.
 
-La estructura y el perfil permiten incorporar otros clientes, pero el ejecutor de cambios de este MVP está acotado a la HU piloto de NaturaPet. Para otro caso se debe implementar y probar una estrategia de edición y sus validadores antes de permitir push/PR.
+La lógica de esta estrategia ya no depende de la medida `NP-001`, pero sigue acotada a razones seguras en un notebook con la estructura configurada. Otros tipos de cambio necesitan editor, validadores y pruebas propias antes de permitir push/PR.
 
-El piloto `NP-001` produjo [NaturaPet PR #6](https://github.com/srinconr-Crea/Naturapet_DLH/pull/6), abierto y pendiente de revisión humana. La [evidencia de validación](docs/pilot/validacion.md) incluye el diff, costo estimado y límites de pruebas. La App y el warehouse quedaron detenidos.
+El piloto `NP-001` produjo [NaturaPet PR #6](https://github.com/srinconr-Crea/Naturapet_DLH/pull/6). La segunda prueba `NP-002` produjo [NaturaPet PR #7](https://github.com/srinconr-Crea/Naturapet_DLH/pull/7) y tres registros de llamadas a modelos, consultables por HU y agente. La [evidencia del primer piloto](docs/pilot/validacion.md) y la [guía de operación](docs/operacion.md) explican costos estimados y límites de validación. El [plan de implementación](docs/superpowers/plans/2026-09-28-productizacion-harness.md) detalla la trazabilidad, cancelación, parada autorizada y evolución hacia otros proyectos.
 
 ## Estructura
 
