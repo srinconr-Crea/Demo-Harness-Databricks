@@ -1,0 +1,22 @@
+.DS_Store
+__pycache__/
+# local bundle files
+**/.databricks/*
+.idea
+.vscode
+mlruns
+*.db
+.dbx
+# Local env / secrets (use .env.example as a template)
+.env
+# Exclude local environment directory
+venv
+.venv/
+.uv-cache/
+.pytest_cache/
+pytest-cache-files-*/
+.runs/
+# Exclude local distribution/packaging directories
+*.egg-info/
+build
+dist

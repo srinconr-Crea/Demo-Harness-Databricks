@@ -1,0 +1,6 @@
+{
+  "warehouse_id": "9e696889dea65361",
+  "wait_timeout": "30s",
+  "on_wait_timeout": "CONTINUE",
+  "statement": "WITH samples (id, margen_bruto, costo_total) AS (SELECT * FROM VALUES (1, CAST(20 AS DOUBLE), CAST(10 AS DOUBLE)), (2, CAST(20 AS DOUBLE), CAST(0 AS DOUBLE)), (3, CAST(20 AS DOUBLE), CAST(NULL AS DOUBLE))) SELECT id, CASE WHEN costo_total IS NULL OR costo_total = 0 THEN NULL ELSE margen_bruto / costo_total END AS margen_sobre_costo_pct FROM samples ORDER BY id"
+}

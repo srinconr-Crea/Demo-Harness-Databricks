@@ -1,0 +1,19 @@
+name: naturapet
+version: "2"
+repository: srinconr-Crea/Naturapet_DLH
+base_branch: develop
+github_app_id: 5075619
+github_installation_id: 164865183
+allowed_paths:
+  - notebooks/comercial/silver/
+strategy:
+  kind: silver_safe_ratio
+  notebook: notebooks/comercial/silver/04_business_derivations.ipynb
+  table: fact_ventas_cabecera
+  anchor_column: margen_pct
+  allowed_source_columns:
+    - margen_bruto
+    - costo_total
+    - base_neta_sin_iva
+    - descuento_total
+    - valor_bruto
