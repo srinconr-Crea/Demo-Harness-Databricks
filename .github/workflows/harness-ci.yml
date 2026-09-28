@@ -15,3 +15,18 @@ jobs:
       - name: Run harness tests
         run: uv run --group dev pytest ../../../tests -q
         working-directory: src/agents/harness
+      - name: Lint active harness and tests
+        run: uv run --group dev ruff check harness app/start_server.py ../../../tests
+        working-directory: src/agents/harness
+  spark-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: astral-sh/setup-uv@v6
+      - name: Validate transformed PySpark source on synthetic rows
+        run: uv run --group spark-validation --with pytest pytest ../../../tests/test_pyspark_smoke.py -q
+        working-directory: src/agents/harness

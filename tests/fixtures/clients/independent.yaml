@@ -1,0 +1,20 @@
+name: independent
+version: "1"
+repository: example/independent-analytics
+base_branch: develop
+github_app_id: 1
+github_installation_id: 2
+ui:
+  display_name: Proyecto independiente
+  business_rules_hint: Defina una razón segura en la tabla configurada
+allowed_paths:
+  - notebooks/independent/silver/
+strategy:
+  kind: silver_safe_ratio
+  notebook: notebooks/independent/silver/derive.ipynb
+  table: fact_ventas_cabecera
+  anchor_column: margen_pct
+  allowed_source_columns:
+    - margen_bruto
+    - costo_total
+    - base_neta_sin_iva

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
 from decimal import Decimal
@@ -9,7 +10,7 @@ from pathlib import Path, PurePosixPath
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictBool, ValidationError, field_validator
 
 
 class Story(BaseModel):
@@ -71,22 +72,28 @@ class RatioSpec(BaseModel):
 
 class RunAttempt(BaseModel):
     attempt_id: str
-    state: Literal["queued", "running", "complete", "failed", "interrupted"]
+    state: Literal["queued", "running", "complete", "failed", "cancelled", "interrupted"]
     queued_at: datetime | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error: str | None = None
+    changed_files: list[str] = Field(default_factory=list)
+    result: dict | None = None
+    publication: dict = Field(default_factory=lambda: {"stage": "not_started"})
+    events: list[dict] = Field(default_factory=list)
+    cancel_requested_at: datetime | None = None
+    cancel_requested_by: str | None = None
 
 
 class RunContract(BaseModel):
-    schema_version: int = 2
+    schema_version: int = 3
     run_id: str
     story_id: str
     story: Story | None = None
     client_profile: str | None = None
     client_profile_version: str | None = None
     repository: str | None = None
-    state: Literal["queued", "running", "complete", "failed", "interrupted"]
+    state: Literal["queued", "running", "complete", "failed", "cancelled", "interrupted"]
     attempt_id: str | None = None
     instance_id: str | None = None
     attempts: list[RunAttempt] = Field(default_factory=list)
@@ -97,23 +104,70 @@ class RunContract(BaseModel):
     changed_files: list[str] = Field(default_factory=list)
     result: dict | None = None
     error: str | None = None
+    stop_requests: list[dict] = Field(default_factory=list)
 
 
 class AgentCallContract(BaseModel):
-    schema_version: int = 1
+    schema_version: int = 2
     call_id: str
     run_id: str
     attempt_id: str
     story_id: str
     role: str
     model: str
-    response: str
-    completed_at: datetime
+    status: Literal["complete", "failed"] = "complete"
+    input_text: str | None = None
+    output_text: str | None = None
+    parsed_output: dict | None = None
+    input_sha256: str | None = None
+    output_sha256: str | None = None
+    client_request_id: str | None = None
+    databricks_request_id: str | None = None
+    response: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    duration_ms: int | None = None
+    error: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
     estimated_cost_usd: Decimal | None = None
     currency: Literal["USD"] = "USD"
     pricing_source: str
+
+
+class AnalystOutput(BaseModel):
+    valid: StrictBool
+    notes: str = ""
+    evidence: list[str] = Field(default_factory=list)
+
+
+class DeveloperOutput(BaseModel):
+    expression: str
+    notes: str = ""
+
+
+class VerifierOutput(BaseModel):
+    approved: StrictBool
+    notes: str = ""
+    findings: list[str] = Field(default_factory=list)
+
+
+_ROLE_OUTPUTS = {"analyst": AnalystOutput, "developer": DeveloperOutput, "verifier": VerifierOutput}
+
+
+def parse_agent_output(role: str, response: str) -> dict:
+    if role not in _ROLE_OUTPUTS:
+        raise ValueError("Rol de agente no configurado")
+    body = response.strip()
+    if body.startswith("```json\n") and body.endswith("```"):
+        body = body[len("```json\n"):-3].strip()
+    elif body.startswith("```\n") and body.endswith("```"):
+        body = body[len("```\n"):-3].strip()
+    try:
+        value = json.loads(body)
+        return _ROLE_OUTPUTS[role].model_validate(value).model_dump()
+    except (json.JSONDecodeError, ValidationError, TypeError) as error:
+        raise ValueError(f"Salida no válida del rol {role}") from error
 
 
 class ClientProfile(BaseModel):
@@ -125,6 +179,7 @@ class ClientProfile(BaseModel):
     strategy: SafeRatioStrategy | None = None
     github_app_id: int | None = None
     github_installation_id: int | None = None
+    ui: dict[str, str] = Field(default_factory=dict)
 
     def allows(self, path: str) -> bool:
         pure = PurePosixPath(path)

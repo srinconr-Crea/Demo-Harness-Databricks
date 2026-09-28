@@ -1,6 +1,12 @@
 # Plan de implementación: trazabilidad, control y reutilización del harness
 
-Fecha: 2026-09-28. Estado: plan; los cambios funcionales descritos aquí aún no están implementados.
+Fecha: 2026-09-28. Estado: implementación local revisada; pendiente despliegue y prueba de extremo a extremo en Databricks.
+
+## Avance de la implementación
+
+Se implementaron contratos por HU, intento y llamada, entradas/salidas redactadas, identificadores de solicitud, eventos de gates, consulta SQL, cancelación cooperativa, parada con identidad del usuario, UI actualizada, tareas de agentes en YAML, registro de estrategia y un segundo perfil de prueba. CI incorpora una prueba PySpark sintética y una instantánea de checks del PR. `docs/agents/agent-spec.json` fue validado con la skill `creating-databricks-agents`.
+
+La suite local valida el flujo sin acceso a PySpark/Java; ese caso corre en CI. El warehouse y la App estaban detenidos en el preflight y el bundle aún no está desplegado. Quedan para el siguiente piloto la comprobación de `client_request_id` y seguimiento de uso real, la autorización efectiva de `apps`/`CAN MANAGE`, la ejecución de la consulta SQL sobre el volumen y una HU sintética. Las trazas MLflow no se conectaron al flujo FastAPI; los eventos JSON son la evidencia actual.
 
 ## Objetivo y límites
 

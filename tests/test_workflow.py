@@ -1,7 +1,9 @@
 import json
+from pathlib import Path
 
 import pytest
-from harness.contracts import ClientProfile, Story
+from harness.contracts import ClientProfile, Story, load_profile
+from harness.webapp import CancelledRun
 from harness.workflow import run_story
 from test_notebook_edit import fixture_notebook
 
@@ -18,8 +20,10 @@ class FakeGitHub:
         assert ref == "abc123"
         return fixture_notebook(), "file-sha"
 
-    def create_feature_pr(self, *args):
+    def create_feature_pr(self, *args, on_progress=None):
         self.published = True
+        if on_progress:
+            on_progress("pr_created", pr_url="https://github.com/srinconr-Crea/Naturapet_DLH/pull/999")
         return "https://github.com/srinconr-Crea/Naturapet_DLH/pull/999"
 
 
@@ -93,3 +97,41 @@ def test_verifier_cannot_override_deterministic_gate():
     with pytest.raises(ValueError, match="verificador"):
         run_story(story(), profile(), github, FakeModel(verifier_ok=False), lambda source: True)
     assert not github.published
+
+
+def test_cancel_before_publication_preserves_changed_file_without_creating_pr():
+    class Control:
+        def __init__(self):
+            self.changed = []
+            self.progress = []
+
+        def check_cancel(self):
+            return None
+
+        def record_changed_files(self, files):
+            self.changed = files
+
+        def record_event(self, stage, status, **details):
+            self.progress.append((stage, status))
+
+        def begin_publication(self):
+            raise CancelledRun()
+
+        def record_publication(self, stage, **details):
+            self.progress.append((stage, details))
+
+    github = FakeGitHub()
+    control = Control()
+    with pytest.raises(CancelledRun):
+        run_story(story(), profile(), github, FakeModel(), lambda spec: True, control=control)
+    assert control.changed == ["notebooks/comercial/silver/04_business_derivations.ipynb"]
+    assert not github.published
+
+
+def test_second_profile_isolated_by_yaml_and_uses_its_own_path():
+    sample = load_profile(Path(__file__).parent / "fixtures" / "clients" / "independent.yaml")
+    assert sample.repository == "example/independent-analytics"
+    assert not sample.allows(profile().strategy.notebook)
+    report = run_story(story(), sample, FakeGitHub(), FakeModel(), lambda spec: True)
+    assert report.changed_files == [sample.strategy.notebook]
+    assert profile().strategy.notebook not in report.changed_files

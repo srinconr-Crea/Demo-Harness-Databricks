@@ -3,10 +3,13 @@ from pathlib import Path
 
 import pytest
 from harness.contracts import (
+    AgentCallContract,
     ClientProfile,
+    RunAttempt,
     Story,
     estimate_cost,
     load_client_profile,
+    parse_agent_output,
     parse_ratio_story,
 )
 
@@ -85,3 +88,31 @@ def test_naturapet_profile_accepts_second_story_without_hu_specific_yaml():
     spec = parse_ratio_story(Story.model_validate(data), profile)
     assert spec.output_column == "costo_sobre_venta_pct"
     assert profile.allows(profile.strategy.notebook)
+
+
+def test_attempt_preserves_result_and_publication_for_historical_join():
+    attempt = RunAttempt(
+        attempt_id="attempt-one", state="complete", changed_files=["notebooks/one.ipynb"],
+        result={"pr_url": "https://github.com/o/r/pull/1"},
+        publication={"stage": "pr_created", "branch": "feature/one"},
+    )
+    assert attempt.model_dump()["changed_files"] == ["notebooks/one.ipynb"]
+    assert attempt.publication["stage"] == "pr_created"
+
+
+def test_agent_call_contract_exposes_input_output_and_request_join():
+    call = AgentCallContract(
+        call_id="call-one", run_id="run-one", attempt_id="attempt-one", story_id="NP-001",
+        role="analyst", model="endpoint", status="complete", input_text='{"story":"NP-001"}',
+        output_text='{"valid":true}', parsed_output={"valid": True},
+        client_request_id="call-one", started_at="2026-09-28T19:00:00Z",
+        completed_at="2026-09-28T19:00:01Z", pricing_source="configured",
+    )
+    assert call.client_request_id == call.call_id
+    assert call.input_text and call.output_text and call.parsed_output["valid"]
+
+
+def test_agent_output_schema_rejects_wrong_role_fields():
+    assert parse_agent_output("analyst", '{"valid":true,"notes":"ok"}')["valid"] is True
+    with pytest.raises(ValueError):
+        parse_agent_output("verifier", '{"valid":true}')

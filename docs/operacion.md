@@ -17,13 +17,17 @@ En el piloto original, el formulario venía precargado con `NP-001`. El flujo co
 
 La versión actual deja el formulario vacío y obtiene `columna = numerador / denominador` de la HU. El perfil `config/clients/naturapet.yaml` conserva únicamente el repositorio, la rama, la instalación GitHub App, el notebook, la tabla, la columna ancla y la lista de columnas de origen permitidas. La estrategia `silver_safe_ratio` edita una sola columna con `safe_divide`; cualquier otra clase de cambio sigue bloqueada. Antes de reutilizar una rama o PR, el cliente comprueba que el conjunto completo de archivos cambiados coincida con los archivos validados.
 
-La validación remota ejecuta una expresión SQL equivalente, sin DDL ni datos de NaturaPet. No ejecuta el notebook PySpark ni la CI del repositorio cliente. Es una limitación que debe constar en la revisión humana del PR.
+La validación remota ejecuta una expresión SQL equivalente, sin DDL ni datos de NaturaPet. CI ejecuta además el fragmento editado de un notebook sintético en PySpark local con Java 17. Ninguna prueba ejecuta el pipeline completo de NaturaPet. Después de crear el PR, el harness consulta una instantánea de checks; `pending` o `unavailable` nunca se presenta como `passed`.
 
 ## Contratos y recuperación
 
-El catálogo `demo_harness_databricks_dev` contiene el volumen `artifacts`. La ruta real del esquema en desarrollo puede llevar prefijo de usuario; la App toma el valor resuelto de `RUN_STORE_DIR`. Cada HU guarda `runs/<run_id>.json` con versión de esquema, HU completa, perfil y versión, repositorio, estado, intentos, fechas UTC, archivos cambiados y resultado. Cada respuesta de agente guarda `runs/agent_calls/<run_id>-<call_id>.json` con `run_id`, `attempt_id`, `call_id`, rol, modelo, respuesta, tokens, fecha UTC, costo estimado en USD y origen de la tarifa. La unión de una ejecución con sus costos usa `run_id` y `attempt_id`; `call_id` identifica cada llamada sin ambigüedad. Son archivos JSON del volumen UC, no tablas Delta.
+El catálogo `demo_harness_databricks_dev` contiene el volumen `artifacts`. La ruta real del esquema en desarrollo puede llevar prefijo de usuario; la App toma el valor resuelto de `RUN_STORE_DIR`. Cada HU guarda `runs/<run_id>.json` con versión de esquema, HU completa, perfil y versión, repositorio, estado, fechas UTC y una lista de intentos. Cada intento conserva sus archivos cambiados, resultado, eventos de gates, solicitud de cancelación y progreso de publicación. Cada llamada guarda `runs/agent_calls/<run_id>-<call_id>.json` con `run_id`, `attempt_id`, `call_id`, rol, modelo, entrada y salida redactadas y limitadas, huellas SHA-256, respuesta estructurada, tiempos, estado, tokens, costo estimado en USD e identificadores de solicitud. La unión histórica usa siempre `run_id` y `attempt_id`; `call_id` identifica cada llamada. Son JSON en el volumen UC, no tablas Delta.
 
-Al iniciar, la App marca como `interrupted` los registros `queued` o `running` de un proceso anterior. Reenviar la misma HU crea un nuevo `attempt_id` y conserva el historial anterior. La revisión del volumen antes de estos cambios encontró dos registros de NP-001: uno `failed` y uno `complete`; ninguno estaba pendiente. Los registros previos permanecen sin migración automática al contrato v2.
+Al iniciar, la App marca como `interrupted` los registros `queued` o `running` de un proceso anterior. Reenviar la misma HU crea un nuevo `attempt_id` y conserva el historial anterior. La revisión del volumen antes de estos cambios encontró dos registros de NP-001: uno `failed` y uno `complete`; ninguno estaba pendiente. Los registros previos siguen legibles sin migración automática. El contrato de ejecución actual es v3 y el de llamadas v2.
+
+Cancelar una HU en cola la marca `cancelled` antes de ejecutar el runner. En curso, se registra quién lo pidió y la cancelación se aplica en el siguiente punto seguro. La llamada externa en curso puede terminar. Cuando comenzó la publicación, se guarda rama, commit y URL del PR que alcancen a crearse; la ejecución no se presenta como cancelada ocultando el PR. La parada de la App solo se ofrece después de un estado final, se registra antes de invocar la API y requiere el token reenviado del usuario y permiso `CAN MANAGE` en Databricks. El token no se persiste. Una respuesta `stop_requested` confirma la solicitud, no que la App ya esté detenida.
+
+Las entradas y salidas pueden contener HU, fragmentos de código o diffs. El volumen debe tener ACL limitadas a operadores autorizados. El flujo redacta patrones de claves PEM y tokens Databricks y limita el texto con `config/defaults/runtime.yaml`; el operador debe fijar la retención y borrado de JSON de acuerdo con la política del proyecto antes de usar datos sensibles.
 
 ## Costos
 
@@ -47,11 +51,13 @@ ORDER BY completed_at;
 
 Para unir una HU con sus llamadas, filtra los registros de `runs/` por `state IS NOT NULL` o por un estado concreto y une por **ambos** `run_id` y `attempt_id`. `read_files` sobre la carpeta padre puede incluir los JSON de `agent_calls/`; omitir ese filtro duplica filas y costos.
 
+La consulta versionada [harness_costs_by_call.sql](sql/harness_costs_by_call.sql) devuelve una fila por llamada con HU, intento, agente, entrada, salida, archivos del mismo intento y costo estimado. Define `:runs_path` como el patrón `.../runs/*.json` y `:calls_path` como `.../runs/agent_calls/*.json` del volumen resuelto por el bundle. El [join opcional con endpoint_usage](sql/harness_endpoint_usage_join.sql) requiere seguimiento de solicitudes habilitado y acceso a la tabla de sistema. La tabla existe en el workspace, pero su configuración de seguimiento y filas para estos endpoints aún no se ha comprobado; NP-002 es anterior al envío de `client_request_id` y no admite join exacto retrospectivo. `system.billing.usage` sigue separado de costos estimados por llamada.
+
 El consumo facturado de modelos se busca en `system.billing.usage` con `sku_name = 'PREMIUM_ANTHROPIC_MODEL_SERVING'` y `usage_type = 'TOKEN'`. Ese uso se registra en DBU y no equivale al costo estimado en USD del contrato. En la revisión de NP-002, la tabla de facturación solo contenía eventos del 2026-09-28 hasta las 15:00 UTC, mientras la HU corrió entre las 19:14 y 19:15 UTC; todavía no era posible conciliarla con la factura.
 
 ## GitHub App y secreto
 
-La GitHub App usa un token de instalación de corta duración. Su clave privada se cargó al secreto `github-app-private-key` por stdin, sin imprimirla ni versionarla. Al renovar la clave, conserva el mismo procedimiento. La App solicita permisos `Contents` y `Pull requests` de lectura/escritura, y `Metadata` de lectura. No tiene webhooks y solo está instalada en NaturaPet.
+La GitHub App usa un token de instalación de corta duración. Su clave privada se cargó al secreto `github-app-private-key` por stdin, sin imprimirla ni versionarla. Al renovar la clave, conserva el mismo procedimiento. La App solicita permisos `Contents` y `Pull requests` de lectura/escritura, y `Metadata` de lectura. No tiene webhooks y solo está instalada en NaturaPet. La lectura opcional de checks solicita un token separado con `Checks: read`; como ese permiso aún no está concedido a la instalación piloto, el resultado puede ser `unavailable` sin bloquear el PR. Para verlo, agregar solo `Checks: read` a la GitHub App y volver a consentir la instalación. GitHub [documenta ese permiso para listar checks](https://docs.github.com/en/rest/checks/runs#list-check-runs-for-a-git-reference).
 
 ## Incorporar otro proyecto
 
@@ -60,5 +66,11 @@ La GitHub App usa un token de instalación de corta duración. Su clave privada 
 3. Reutilizar `silver_safe_ratio` solo si el notebook cumple su contrato estructural, o implementar un editor y pruebas deterministas para otra clase de cambio.
 4. Crear o asignar sandbox remoto separado; verificar permisos de App y costo.
 5. Ejecutar pruebas locales, `bundle validate`, y un piloto sin merge automático.
+
+El registro de editores está en `harness/strategies.py`. Un segundo perfil sintético en `tests/fixtures/clients/independent.yaml` prueba aislamiento de rutas sin una segunda instalación real ni permisos de producción. Nuevas clases de HU exigen un editor, validadores y pruebas antes de registrarse.
+
+## Estado de la entrega
+
+El código y la configuración de esta iteración se publican en la rama `MVP-Databricks-Harness`. El preflight de solo lectura del 2026-09-28 encontró la App `demo-dbx-harness-mvp` detenida y con scopes efectivos de identidad básicos; el scope `apps` del bundle todavía no está desplegado. El warehouse de sandbox estaba detenido. Por eso no se ejecutaron consultas SQL nuevas ni una HU en Databricks durante esta entrega. Antes del siguiente piloto: revisar el plan del bundle, desplegar la App con `user_api_scopes: [apps]`, comprobar el consentimiento y `CAN MANAGE` para el operador, activar o verificar seguimiento de uso por solicitud y ejecutar una HU sintética. La evaluación automática de los JSON está en `harness/evaluation.py`; las trazas MLflow del flujo FastAPI todavía no están conectadas.
 
 La configuración de otro cliente por sí sola no activa tipos de cambio nuevos: cada estrategia debe contar con editor, validadores y pruebas antes de permitir publicación.

@@ -26,6 +26,13 @@
     button:hover:not(:disabled) {background:#105989;transform:translateY(-1px)}
     button:focus-visible {outline:3px solid #8bc8ef;outline-offset:3px}
     button:disabled {opacity:.58;cursor:wait;box-shadow:none}
+    .actions {display:flex;flex-wrap:wrap;gap:.7rem;margin-top:1.2rem}
+    .actions[hidden] {display:none}
+    .secondary {background:#f5f8fc;color:#244b70;border:1px solid #bfd2e2;box-shadow:none}
+    .secondary:hover:not(:disabled) {background:#e5eff7}
+    .danger {background:#a63d51;box-shadow:none}
+    .danger:hover:not(:disabled) {background:#892f42}
+    .status-chip {display:inline-block;border-radius:999px;background:#e6eff8;color:#205078;padding:.2rem .7rem;font-size:.79rem;font-weight:700}
     #result {margin-top:1.6rem;padding:1.1rem 1.3rem;border:1px solid #d8e8f4;border-radius:12px;background:#f3f9fd;color:#26445e;line-height:1.6;white-space:pre-wrap;word-break:break-word}
     #result:empty {display:none}
     a {color:#0f659f;font-weight:700}
@@ -36,7 +43,7 @@
   <header class="hero">
     <p class="eyebrow">Desarrollo controlado · Databricks</p>
     <h1>De historia de usuario a pull request</h1>
-    <p>Describe el cambio para el proyecto configurado. El harness analiza la HU, valida el resultado en un entorno aislado y prepara un PR para revisión humana.</p>
+    <p>Describe el cambio para <span id="project-name">el proyecto configurado</span>. El harness analiza la HU, valida el resultado en un entorno aislado y prepara un PR para revisión humana.</p>
   </header>
   <div class="content">
   <h2 class="section-title">Nueva historia de usuario</h2>
@@ -47,32 +54,73 @@
     </div>
     <label>Arquitectura<textarea name="architecture" required placeholder="Capa y componente afectado"></textarea></label>
     <label>Origen y destino<textarea name="source_target" required placeholder="Tabla de origen y destino"></textarea></label>
-    <label>Reglas de negocio<textarea name="business_rules" required placeholder="columna_resultado = numerador / denominador; tratamiento de cero y NULL"></textarea></label>
+    <label>Reglas de negocio<textarea name="business_rules" required placeholder="Describe la regla y los casos límite"></textarea></label>
     <label>Requisitos no funcionales<textarea name="nonfunctional" required placeholder="Restricciones de alcance e idempotencia"></textarea></label>
     <label>Reglas de validación<textarea name="validation" required placeholder="Casos esperados y verificaciones"></textarea></label>
     <button type="submit">Ejecutar HU</button>
   </form>
   <section id="result" role="status" aria-live="polite"></section>
+  <div id="actions" class="actions" hidden>
+    <button id="cancel" class="secondary" type="button" hidden>Cancelar HU</button>
+    <button id="stop" class="danger" type="button" hidden>Detener App</button>
+  </div>
   </div>
 </main>
 <script>
 const form=document.getElementById('story'), output=document.getElementById('result');
+const actions=document.getElementById('actions'), cancelButton=document.getElementById('cancel'), stopButton=document.getElementById('stop');
+let activeRunId=null;
+fetch('/configuration').then(response=>response.json()).then(config=>{
+  if(config.ui?.display_name) document.getElementById('project-name').textContent=config.ui.display_name;
+  for(const [field,key] of Object.entries({architecture:'architecture_hint',source_target:'source_target_hint',business_rules:'business_rules_hint',validation:'validation_hint'})) {
+    if(config.ui?.[key]) form.elements[field].placeholder=config.ui[key];
+  }
+}).catch(()=>{});
+function showActions(state) {
+  const active=state==='queued'||state==='running';
+  const final=['complete','failed','cancelled','interrupted'].includes(state);
+  actions.hidden=!active&&!final; cancelButton.hidden=!active; stopButton.hidden=!final;
+}
+async function postAction(path,body) {
+  const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await response.json(); if(!response.ok) throw Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));
+  return data;
+}
+cancelButton.addEventListener('click',async()=>{
+  if(!activeRunId) return;
+  cancelButton.disabled=true;
+  try {await postAction('/runs/'+activeRunId+'/cancel',{}); output.append('\nCancelación solicitada; se aplicará en el siguiente punto seguro.');}
+  catch(error) {output.append('\nNo se pudo cancelar: '+error.message);cancelButton.disabled=false;}
+});
+stopButton.addEventListener('click',async()=>{
+  if(!activeRunId) return;
+  stopButton.disabled=true;
+  try {await postAction('/app/stop',{run_id:activeRunId});output.append('\nSolicitud de parada enviada a Databricks.');}
+  catch(error) {output.append('\nNo se pudo detener la App: '+error.message);stopButton.disabled=false;}
+});
 form.addEventListener('submit',async event=>{
-  event.preventDefault(); const button=form.querySelector('button'); button.disabled=true;
+  event.preventDefault(); const button=form.querySelector('button'); button.disabled=true;showActions(null);
   output.textContent='Validando HU…';
   try {
     const payload=Object.fromEntries(new FormData(form).entries());
     const response=await fetch('/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    const data=await response.json(); if(!response.ok) throw Error(JSON.stringify(data.detail));
+    const data=await response.json(); if(!response.ok) throw Error(JSON.stringify(data.detail));activeRunId=data.run_id;
     const poll=async()=>{
       const res=await fetch('/runs/'+data.run_id); const run=await res.json();
-      output.textContent='Estado: '+run.state+(run.error?'\n'+run.error:'');
+      showActions(run.state);
+      const attempt=run.attempts?.at(-1);
+      const publication=attempt?.publication||{};
+      const details=[publication.stage&&publication.stage!=='not_started'?'Publicación: '+publication.stage:null,publication.branch?'Rama publicada: '+publication.branch:null,publication.commit_sha?'Commit publicado: '+publication.commit_sha:null,publication.pr_url?'PR publicado: '+publication.pr_url:null].filter(Boolean);
+      output.textContent='Estado: '+run.state+(details.length?'\n'+details.join('\n'):'')+(attempt?.cancel_requested_at?'\nCancelación solicitada':'')+(run.error?'\n'+run.error:'');
       if(run.state==='complete') {
-        output.textContent='Estado: complete\nRama: '+run.result.branch+'\nPrueba remota: '+run.result.remote_check+'\nCosto estimado de modelos: USD '+(run.result.model_cost_usd ?? 'no disponible')+'\nRevisión humana pendiente.';
+        output.textContent='Estado: complete\nRama: '+run.result.branch+'\nPrueba remota: '+run.result.remote_check+'\nChecks del PR al crearlo: '+(run.result.pr_checks ?? 'no disponibles')+'\nCosto estimado de modelos: USD '+(run.result.model_cost_usd ?? 'no disponible')+'\nRevisión humana pendiente.';
         const url=run.result?.pr_url;
         if(url && url.startsWith('https://github.com/')) { const link=document.createElement('a');link.href=url;link.textContent='Abrir PR';link.target='_blank';link.rel='noopener noreferrer';output.append('\n',link); }
         button.disabled=false;
-      } else if(run.state==='failed' || run.state==='interrupted') button.disabled=false;
+      } else if(['failed','interrupted','cancelled'].includes(run.state)) {
+        if(publication.pr_url?.startsWith('https://github.com/')) {const link=document.createElement('a');link.href=publication.pr_url;link.textContent='Abrir PR publicado';link.target='_blank';link.rel='noopener noreferrer';output.append('\n',link);}
+        button.disabled=false;
+      }
       else setTimeout(poll,2000);
     }; await poll();
   } catch(error) {output.textContent='Error: '+error.message;button.disabled=false;}

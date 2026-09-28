@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "mode": "single-agent",
+  "agent": {
+    "name": "${var.app_name}",
+    "role": "deterministic-supervisor",
+    "purpose": "Orchestrate one configured story into a validated feature branch and pull request.",
+    "existing_app": true,
+    "model_endpoint": "config/defaults/models.yaml:routing",
+    "identity_mode": "app-service-principal"
+  },
+  "scope": {
+    "environment": "dev",
+    "databricks_profile": "CREA_DEV",
+    "bundle_target": "dev",
+    "repository_path": "config/clients/${var.client_profile}.yaml:repository",
+    "branch": "config/clients/${var.client_profile}.yaml:base_branch",
+    "allowed_paths": ["config/clients/${var.client_profile}.yaml:allowed_paths"],
+    "forbidden_paths": [".github/", "../"],
+    "catalogs": ["${var.catalog}"],
+    "schemas": ["${var.schema}"],
+    "tables": []
+  },
+  "capabilities": ["repository-read", "restricted-file-edit", "sql-synthetic-validation", "feature-pr-publication"],
+  "tools": ["GitHub App", "Databricks Foundation Model API", "Databricks SQL statement API", "UC Volume"],
+  "contract": {
+    "input_schema": "src/agents/harness/harness/contracts.py:Story",
+    "output_schema": "src/agents/harness/harness/contracts.py:RunContract",
+    "canonical_output": "json",
+    "render_markdown": true,
+    "failure_status": "failed"
+  },
+  "observability": {
+    "mlflow_experiment": "${resources.experiments.experiment.name}",
+    "trace_tables": ["UC Volume: runs", "UC Volume: agent_calls"]
+  },
+  "approvals": {
+    "allow_model_probe": false,
+    "allow_local_changes": true,
+    "allow_permission_changes": false,
+    "allow_deploy": false,
+    "allow_run": false
+  }
+}

@@ -2,7 +2,12 @@ from decimal import Decimal
 
 import pytest
 from harness.github import GitHubAppClient
-from harness.models import ModelClient, load_model_config
+from harness.models import (
+    ModelClient,
+    load_model_config,
+    load_runtime_config,
+    sanitize_log_value,
+)
 
 
 class FakeWorkspaceAPI:
@@ -42,6 +47,49 @@ def test_model_call_sink_receives_role_response_usage_and_cost():
     assert saved[0][1].cost_usd == Decimal("0.8")
 
 
+def test_model_call_id_is_sent_before_invocation_and_input_output_are_recorded():
+    saved = []
+    api = FakeWorkspaceAPI({"choices": [{"message": {"content": '{"valid":true}'}}], "usage": {"prompt_tokens": 2, "completion_tokens": 3}})
+    client = ModelClient(api, {"analyst": "endpoint"}, {"endpoint": (Decimal("0.1"), Decimal("0.2"))}, on_call=lambda role, call: saved.append(call))
+    client.complete("analyst", "Analiza", call_id="call-123", usage_context={"run_id": "run-1"})
+    body = api.calls[0][2]
+    assert body["client_request_id"] == "call-123"
+    assert body["usage_context"]["run_id"] == "run-1"
+    assert saved[0].call_id == "call-123"
+    assert "Analiza" in saved[0].input_text
+    assert saved[0].output_text == '{"valid":true}'
+    assert saved[0].status == "complete"
+    assert saved[0].input_sha256 and saved[0].output_sha256
+
+
+def test_model_failure_is_logged_without_fabricating_cost():
+    class FailingAPI:
+        def do(self, *_args, **_kwargs):
+            raise RuntimeError("endpoint unavailable")
+
+    saved = []
+    client = ModelClient(FailingAPI(), {"analyst": "endpoint"}, {}, on_call=lambda role, call: saved.append(call))
+    with pytest.raises(RuntimeError, match="endpoint unavailable"):
+        client.complete("analyst", "Analiza", call_id="call-123")
+    assert saved[0].status == "failed"
+    assert saved[0].cost_usd is None
+    assert saved[0].output_text is None
+
+
+def test_empty_model_response_is_logged_as_failure():
+    saved = []
+    client = ModelClient(FakeWorkspaceAPI({"choices": []}), {"analyst": "endpoint"}, {}, on_call=lambda role, call: saved.append(call))
+    with pytest.raises(ValueError, match="Respuesta vacía"):
+        client.complete("analyst", "Analiza")
+    assert len(saved) == 1 and saved[0].status == "failed"
+    assert saved[0].cost_usd is None
+
+
+def test_nested_parsed_output_is_redacted_before_persistence():
+    value = {"notes": ["dapi12345678901234567890"]}
+    assert sanitize_log_value(value, 1000) == {"notes": ["[REDACTED_TOKEN]"]}
+
+
 def test_model_config_is_keyed_by_endpoint_not_hardcoded_role_prices(tmp_path):
     path = tmp_path / "models.yaml"
     path.write_text("routing:\n  analyst: custom-a\n  developer: custom-a\n  verifier: custom-b\npricing:\n  source: estimated\n  endpoints:\n    custom-a: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n    custom-b: {input_usd_per_token: 0.3, output_usd_per_token: 0.4}\n", encoding="utf-8")
@@ -49,6 +97,12 @@ def test_model_config_is_keyed_by_endpoint_not_hardcoded_role_prices(tmp_path):
     assert routing["developer"] == "custom-a"
     assert prices["custom-b"] == (Decimal("0.3"), Decimal("0.4"))
     assert source == "estimated"
+
+
+def test_runtime_logging_limits_are_loaded_from_yaml(tmp_path):
+    path = tmp_path / "runtime.yaml"
+    path.write_text("logging:\n  max_text_chars: 1200\n", encoding="utf-8")
+    assert load_runtime_config(path)["logging"]["max_text_chars"] == 1200
 
 
 def test_model_normalizes_text_blocks_from_foundation_api():
@@ -100,3 +154,41 @@ def test_existing_pr_with_extra_file_is_not_reused():
     client = ExtraFilePR(1, 2, "unused", repository="o/r", base_branch="develop")
     with pytest.raises(ValueError, match="archivos adicionales"):
         client.create_feature_pr("o/r", "feature/np-002", "develop", "title", "body", "base-sha", {"notebooks/a.ipynb": ("validated content", "sha")})
+
+
+@pytest.mark.parametrize(("runs", "expected"), [
+    ([], "pending"),
+    ([{"status": "in_progress"}], "pending"),
+    ([{"status": "completed", "conclusion": "success"}], "passed"),
+    ([{"status": "completed", "conclusion": "failure"}], "failed"),
+])
+def test_pr_check_snapshot_never_calls_missing_checks_passed(runs, expected):
+    class Checks(GitHubAppClient):
+        def _checks_request(self, path):
+            assert "/check-runs" in path
+            return {"check_runs": runs}
+
+    client = Checks(1, 2, "unused", repository="o/r", base_branch="develop")
+    assert client.pr_check_status("o/r", "feature/test") == expected
+
+
+def test_check_read_uses_separate_narrow_token():
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"check_runs": []}
+
+    class Http:
+        def get(self, path, headers):
+            assert headers["Authorization"] == "Bearer checks-token"
+            return Response()
+
+    class Checks(GitHubAppClient):
+        def _new_installation_token(self, permissions):
+            assert permissions == {"checks": "read"}
+            return "checks-token"
+
+    client = Checks(1, 2, "unused", repository="o/r", base_branch="develop", http=Http())
+    assert client.pr_check_status("o/r", "feature/test") == "pending"

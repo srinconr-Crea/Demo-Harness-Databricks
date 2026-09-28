@@ -4,6 +4,12 @@ repository: srinconr-Crea/Naturapet_DLH
 base_branch: develop
 github_app_id: 5075619
 github_installation_id: 164865183
+ui:
+  display_name: NaturaPet
+  architecture_hint: Capa y componente comercial afectado
+  source_target_hint: Tabla de origen y destino dentro de Silver comercial
+  business_rules_hint: "columna_resultado = numerador / denominador; tratamiento de cero y NULL"
+  validation_hint: Casos positivo, cero y NULL
 allowed_paths:
   - notebooks/comercial/silver/
 strategy:

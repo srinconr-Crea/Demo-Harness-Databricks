@@ -10,6 +10,20 @@ variables:
     default: demo_harness_databricks
   catalog_storage_root:
     description: Dedicated managed storage root for the harness catalog
+  app_name:
+    description: Databricks App managed by this bundle
+  client_profile:
+    description: YAML client profile selected at runtime
+  warehouse_id:
+    description: Isolated SQL warehouse for synthetic validation
+  analyst_endpoint:
+    description: Foundation Model API endpoint for analyst and developer
+  verifier_endpoint:
+    description: Foundation Model API endpoint for verifier
+  github_secret_scope:
+    description: Scope containing the GitHub App private key
+  github_secret_key:
+    description: Key containing the GitHub App private key
 
 
 include:
@@ -25,8 +39,10 @@ include:
 resources:
   apps:
     harness:
-      name: "demo-dbx-harness-mvp"
+      name: ${var.app_name}
       description: "harness agent — demo_harness_databricks"
+      user_api_scopes:
+        - apps
       source_code_path: ./src/agents/harness
       config:
         command: ["uv", "run", "--no-dev", "python", "app/start_server.py"]
@@ -34,7 +50,9 @@ resources:
           - name: RUN_STORE_DIR
             value: /Volumes/${resources.volumes.artifacts.catalog_name}/${resources.volumes.artifacts.schema_name}/${resources.volumes.artifacts.name}/runs
           - name: HARNESS_CLIENT_PROFILE
-            value: naturapet
+            value: ${var.client_profile}
+          - name: HARNESS_APP_NAME
+            value: ${var.app_name}
           - name: GITHUB_APP_PRIVATE_KEY
             value_from: github-private-key
           - name: HARNESS_WAREHOUSE_ID
@@ -42,20 +60,20 @@ resources:
       resources:
         - name: github-private-key
           secret:
-            scope: demo-harness-databricks
-            key: github-app-private-key
+            scope: ${var.github_secret_scope}
+            key: ${var.github_secret_key}
             permission: READ
         - name: sonnet-five
           serving_endpoint:
-            name: databricks-claude-sonnet-5
+            name: ${var.analyst_endpoint}
             permission: CAN_QUERY
         - name: haiku-four-five
           serving_endpoint:
-            name: databricks-claude-haiku-4-5
+            name: ${var.verifier_endpoint}
             permission: CAN_QUERY
         - name: sandbox-warehouse
           sql_warehouse:
-            id: 9e696889dea65361
+            id: ${var.warehouse_id}
             permission: CAN_USE
         - name: run-records-read
           uc_securable:
@@ -86,3 +104,10 @@ targets:
     variables:
       catalog: demo_harness_databricks_dev
       catalog_storage_root: abfss://demo@demodldb.dfs.core.windows.net/harness/demo_harness_databricks_dev
+      app_name: demo-dbx-harness-mvp
+      client_profile: naturapet
+      warehouse_id: 9e696889dea65361
+      analyst_endpoint: databricks-claude-sonnet-5
+      verifier_endpoint: databricks-claude-haiku-4-5
+      github_secret_scope: demo-harness-databricks
+      github_secret_key: github-app-private-key

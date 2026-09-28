@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import time
+from collections.abc import Callable
 from urllib.parse import quote
 
 import httpx
@@ -33,6 +34,11 @@ class GitHubAppClient:
     def _installation_token(self) -> str:
         if self._token and time.time() < self._expires_at - 120:
             return self._token
+        self._token = self._new_installation_token({"contents": "write", "pull_requests": "write"})
+        self._expires_at = time.time() + 3300
+        return self._token
+
+    def _new_installation_token(self, permissions: dict[str, str]) -> str:
         now = int(time.time())
         assertion = jwt.encode(
             {"iat": now - 30, "exp": now + 540, "iss": str(self.app_id)},
@@ -42,13 +48,17 @@ class GitHubAppClient:
         response = self.http.post(
             f"/app/installations/{self.installation_id}/access_tokens",
             headers={"Authorization": f"Bearer {assertion}", "Accept": "application/vnd.github+json"},
-            json={"repositories": [self.repository.split("/", 1)[1]], "permissions": {"contents": "write", "pull_requests": "write"}},
+            json={"repositories": [self.repository.split("/", 1)[1]], "permissions": permissions},
         )
         response.raise_for_status()
         payload = response.json()
-        self._token = payload["token"]
-        self._expires_at = time.time() + 3300
-        return self._token
+        return payload["token"]
+
+    def _checks_request(self, path: str) -> dict:
+        token = self._new_installation_token({"checks": "read"})
+        response = self.http.get(path, headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"})
+        response.raise_for_status()
+        return response.json()
 
     def _request(self, method: str, path: str, **kwargs) -> dict | list:
         response = self.http.request(
@@ -69,6 +79,20 @@ class GitHubAppClient:
             raise ValueError("La rama base no coincide con el perfil autorizado")
         data = self._request("GET", f"/repos/{self.repository}/git/ref/heads/{base_branch}")
         return data["object"]["sha"]
+
+    def pr_check_status(self, repository: str, branch: str) -> str:
+        """Snapshot of checks after PR creation; absence or API denial is never a pass."""
+        self._check_repo(repository)
+        try:
+            data = self._checks_request(f"/repos/{repository}/commits/{quote(branch, safe='/')}/check-runs")
+        except httpx.HTTPError:
+            return "unavailable"
+        runs = data.get("check_runs", [])
+        if not runs:
+            return "pending"
+        if any(item.get("status") != "completed" for item in runs):
+            return "pending"
+        return "passed" if all(item.get("conclusion") in {"success", "skipped", "neutral"} for item in runs) else "failed"
 
     def read_file(self, path: str, *, ref: str) -> tuple[str, str]:
         encoded_path = quote(path, safe="/")
@@ -94,6 +118,8 @@ class GitHubAppClient:
         body: str,
         base_sha: str,
         files: dict[str, tuple[str, str]],
+        *,
+        on_progress: Callable[..., None] | None = None,
     ) -> str:
         self._check_repo(repository)
         if base_branch != self.base_branch or not branch.startswith("feature/") or ".." in branch:
@@ -108,7 +134,10 @@ class GitHubAppClient:
                 current_content, _ = self.read_file(path, ref=branch)
                 if current_content != expected_content:
                     raise ValueError("El PR existente contiene cambios distintos a la HU validada")
-            return existing[0]["html_url"]
+            url = existing[0]["html_url"]
+            if on_progress:
+                on_progress("pr_created", pr_url=url, branch=branch, reused=True)
+            return url
         ref_path = f"/repos/{repository}/git/ref/heads/{quote(branch, safe='/')}"
         try:
             ref = self._request("GET", ref_path)
@@ -116,7 +145,11 @@ class GitHubAppClient:
             if error.response.status_code != 404:
                 raise
             self._request("POST", f"/repos/{repository}/git/refs", json={"ref": f"refs/heads/{branch}", "sha": base_sha})
+            if on_progress:
+                on_progress("branch_created", branch=branch, base_sha=base_sha)
         else:
+            if on_progress:
+                on_progress("branch_created", branch=branch, base_sha=base_sha, reused=True)
             if ref["object"]["sha"] != base_sha:
                 self._verify_branch_diff(repository, branch, base_sha, files)
                 if len(files) != 1:
@@ -126,9 +159,11 @@ class GitHubAppClient:
                 if current_content != expected_content:
                     raise ValueError("La rama feature existente tiene cambios distintos")
                 pr = self._request("POST", f"/repos/{repository}/pulls", json={"title": title, "head": branch, "base": base_branch, "body": body, "draft": False})
+                if on_progress:
+                    on_progress("pr_created", pr_url=pr["html_url"], branch=branch)
                 return pr["html_url"]
         for path, (content, source_sha) in files.items():
-            self._request(
+            updated = self._request(
                 "PUT", f"/repos/{repository}/contents/{quote(path, safe='/')}",
                 json={
                     "message": f"feat: {title}",
@@ -137,5 +172,9 @@ class GitHubAppClient:
                     "branch": branch,
                 },
             )
+            if on_progress:
+                on_progress("file_pushed", branch=branch, path=path, commit_sha=updated.get("commit", {}).get("sha"))
         pr = self._request("POST", f"/repos/{repository}/pulls", json={"title": title, "head": branch, "base": base_branch, "body": body, "draft": False})
+        if on_progress:
+            on_progress("pr_created", pr_url=pr["html_url"], branch=branch)
         return pr["html_url"]
