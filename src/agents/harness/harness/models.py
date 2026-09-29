@@ -21,8 +21,10 @@ from .contracts import estimate_cost
 def load_model_config(path: str | Path) -> tuple[dict[str, str], dict[str, tuple[Decimal, Decimal]], str]:
     config = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     routing = config["routing"]
-    if set(routing) != {"analyst", "developer", "verifier"}:
+    if set(routing) != {"planner", "developer", "verifier"}:
         raise ValueError("La configuración de modelos requiere los tres roles")
+    if routing["planner"] != "databricks-claude-sonnet-5":
+        raise ValueError("El rol planner requiere databricks-claude-sonnet-5")
     prices = {
         endpoint: (Decimal(str(rates["input_usd_per_token"])), Decimal(str(rates["output_usd_per_token"])))
         for endpoint, rates in config["pricing"]["endpoints"].items()

@@ -1,4 +1,4 @@
-# Operación del MVP
+# Operación del Databricks Development Harness
 
 ## Recursos y acceso
 
@@ -12,6 +12,16 @@
 El bundle de desarrollo se despliega con `databricks bundle deploy -t dev --profile CREA_DEV`. Después se publica el código de la App con `databricks bundle run harness -t dev --profile CREA_DEV`. Para detenerla: `databricks apps stop demo-dbx-harness-mvp --profile CREA_DEV`. El archivo `iniciar-harness.bat` vuelve a encenderla y abre su URL.
 
 ## HU piloto y segunda ejecución
+
+### Flujo actual con OpenSpec
+
+Cada intento toma el commit de la rama base del cliente y carga su árbol `openspec/` en un workspace temporal aislado. Ejecuta `openspec init --tools none` antes de cualquier llamada al desarrollador. Si el cliente aún no tiene OpenSpec, crea `openspec/config.yaml` con repositorio, rama, estrategia y notebook del perfil; si ya lo tiene, conserva su configuración y specs. El perfil debe declarar `openspec_root: openspec`.
+
+El planner llama cuatro veces a `databricks-claude-sonnet-5` para producir propuesta, spec, diseño y tareas a partir de la HU, el perfil y las instrucciones de OpenSpec. `openspec validate --strict` y los controles deterministas deben aprobar el plan antes del editor. El desarrollador recibe esos artefactos; después de las pruebas sintéticas, el verificador los revisa junto al diff. El cambio OpenSpec se archiva y el notebook, la configuración, las specs resultantes y el historial del cambio se publican en un único commit de `feature/*` y en un PR. Una persona revisa el PR; el harness no hace merge ni despliega el cliente.
+
+El estado y las huellas del plan aparecen en `GET /runs/{run_id}`, dentro de `attempts[].openspec`. Cada entrada de `artifacts` contiene un `artifact_id`; el contenido redactado se consulta con `GET /runs/{run_id}/openspec/{attempt_id}/{artifact_id}`. Los JSON completos están en `runs/openspec/<run_id>/<attempt_id>/<artifact_id>.json` del volumen UC. Una respuesta fallida conserva los artefactos ya generados y los eventos que alcanzaron a registrarse; un reintento recibe otro `attempt_id` y otro cambio OpenSpec. El volumen mantiene los mismos controles de acceso y retención que los demás registros.
+
+Las cuatro llamadas Sonnet del planner se registran en `runs/agent_calls/` con `role = planner`, identificadores, tiempos, tokens y `estimated_cost_usd` cuando el endpoint entrega `usage`; un fallo o la ausencia de `usage` no se convierte en costo cero. Los JSON históricos con `role = analyst` siguen legibles. Para consultar costos por intento, use [harness_costs_by_call.sql](sql/harness_costs_by_call.sql).
 
 En el piloto original, el formulario venía precargado con `NP-001`. El flujo comprobó `develop`, editó `notebooks/comercial/silver/04_business_derivations.ipynb`, validó sintaxis Python y tres filas sintéticas en el warehouse aislado, pidió revisión al modelo Haiku y creó `feature/np-001-margen-sobre-costo-en-silver-comercial` y su PR.
 

@@ -79,7 +79,7 @@ def execute_story(story: Story, run_id: str, attempt_id: str, control) -> dict:
         system_prompt=AGENT_CONFIG["system_prompt"], max_tokens=AGENT_CONFIG["max_tokens"],
         usage_context={"run_id": run_id, "attempt_id": attempt_id, "story_id": story.id, "client_profile": PROFILE.name},
     )
-    report = run_story(story, PROFILE, github, models, lambda spec: verify_safe_ratio(workspace.api_client, os.environ["HARNESS_WAREHOUSE_ID"], spec), control=control, agent_config=AGENT_CONFIG)
+    report = run_story(story, PROFILE, github, models, lambda spec: verify_safe_ratio(workspace.api_client, os.environ["HARNESS_WAREHOUSE_ID"], spec), control=control, agent_config=AGENT_CONFIG, attempt_id=attempt_id)
     return asdict(report)
 
 

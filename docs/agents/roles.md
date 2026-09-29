@@ -4,10 +4,10 @@ Los tres roles son llamadas a Foundation Model API desde la misma App FastAPI, n
 
 | Rol | Entrada | Salida validada | Autoridad |
 | --- | --- | --- | --- |
-| Analista | HU, ruta permitida y fragmento del notebook | `valid`, `notes`, `evidence` | Puede rechazar el alcance; no edita |
-| Desarrollador | HU, expresión calculada por reglas y código fuente | `expression`, `notes` | Propone; el editor determinista escribe |
-| Verificador | HU, diff y resultado de sandbox | `approved`, `notes`, `findings` | Puede rechazar la publicación |
+| Planner OpenSpec | HU, contexto del cliente, estrategia, expresión y fuente | `content`, `strategy`, `code_path`, `expression` por artefacto | Usa Sonnet 5 para propuesta, spec, diseño y tareas; no edita código |
+| Desarrollador | HU, plan OpenSpec validado, expresión calculada por reglas y código fuente | `expression`, `notes` | Propone; el editor determinista escribe |
+| Verificador | HU, plan OpenSpec, diff y resultado de sandbox | `approved`, `notes`, `findings` | Puede rechazar la publicación |
 
-El orquestador valida JSON con Pydantic y comprueba por código la estrategia, la expresión, el archivo y la prueba de sandbox. Cualquier salida inválida falla antes de publicar. El cliente GitHub App crea la rama y el PR solamente después de los gates. La identidad de servicio de la App opera recursos configurados; la acción opcional de detenerla usa el token del usuario con permiso `CAN MANAGE`.
+El orquestador inicializa OpenSpec en un workspace temporal del repositorio cliente antes de llamar al desarrollador. Valida JSON con Pydantic, ejecuta `openspec validate --strict` y comprueba por código la estrategia, la expresión, el archivo y la prueba de sandbox. Tras la aprobación del verificador, archiva el cambio y publica notebook y archivos OpenSpec en un mismo commit de la rama `feature/*`. La identidad de servicio de la App opera recursos configurados; la acción opcional de detenerla usa el token del usuario con permiso `CAN MANAGE`.
 
-Las llamadas guardan `run_id`, `attempt_id`, `call_id`, entrada, salida, tiempos, tokens y costo estimado en el volumen UC. La salida estructurada se guarda cuando cumple el esquema. El rol no tiene herramientas para ampliar políticas a partir de texto de la HU o del repositorio.
+Las cuatro llamadas del planner a `databricks-claude-sonnet-5` guardan `run_id`, `attempt_id`, `call_id`, entrada, salida, tiempos, tokens y costo estimado en los mismos JSON del volumen UC que los demás roles. Los registros históricos con rol `analyst` siguen legibles. Los artefactos redactados se guardan por intento bajo `runs/openspec/`. Ningún rol puede ampliar políticas a partir de texto de la HU o del repositorio.

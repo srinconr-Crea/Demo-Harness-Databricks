@@ -70,6 +70,22 @@ class RatioSpec(BaseModel):
         return f"safe_divide(F.col('{self.numerator}'), F.col('{self.denominator}'))"
 
 
+class OpenSpecArtifactRef(BaseModel):
+    artifact_id: str
+    sha256: str
+
+
+class OpenSpecAttempt(BaseModel):
+    change_id: str | None = None
+    state: Literal["initializing", "planning", "validated", "archived", "published"] | None = None
+    artifact_hashes: dict[str, str] = Field(default_factory=dict)
+    prepared_files: list[str] = Field(default_factory=list)
+    prepared_hashes: dict[str, str] = Field(default_factory=dict)
+    published_hashes: dict[str, str] = Field(default_factory=dict)
+    artifacts: dict[str, OpenSpecArtifactRef] = Field(default_factory=dict)
+    published_files: list[str] = Field(default_factory=list)
+
+
 class RunAttempt(BaseModel):
     attempt_id: str
     state: Literal["queued", "running", "complete", "failed", "cancelled", "interrupted"]
@@ -81,6 +97,7 @@ class RunAttempt(BaseModel):
     result: dict | None = None
     publication: dict = Field(default_factory=lambda: {"stage": "not_started"})
     events: list[dict] = Field(default_factory=list)
+    openspec: OpenSpecAttempt = Field(default_factory=OpenSpecAttempt)
     cancel_requested_at: datetime | None = None
     cancel_requested_by: str | None = None
 
@@ -141,6 +158,13 @@ class AnalystOutput(BaseModel):
     evidence: list[str] = Field(default_factory=list)
 
 
+class PlannerOutput(BaseModel):
+    content: str = Field(min_length=20, max_length=50000)
+    strategy: Literal["silver_safe_ratio"]
+    expression: str = Field(min_length=1, max_length=500)
+    code_path: str = Field(min_length=1, max_length=500)
+
+
 class DeveloperOutput(BaseModel):
     expression: str
     notes: str = ""
@@ -152,7 +176,7 @@ class VerifierOutput(BaseModel):
     findings: list[str] = Field(default_factory=list)
 
 
-_ROLE_OUTPUTS = {"analyst": AnalystOutput, "developer": DeveloperOutput, "verifier": VerifierOutput}
+_ROLE_OUTPUTS = {"analyst": AnalystOutput, "planner": PlannerOutput, "developer": DeveloperOutput, "verifier": VerifierOutput}
 
 
 def parse_agent_output(role: str, response: str) -> dict:
@@ -176,6 +200,7 @@ class ClientProfile(BaseModel):
     repository: str
     base_branch: str
     allowed_paths: list[str]
+    openspec_root: Literal["openspec"]
     strategy: SafeRatioStrategy | None = None
     github_app_id: int | None = None
     github_installation_id: int | None = None
@@ -186,6 +211,16 @@ class ClientProfile(BaseModel):
         if pure.is_absolute() or ".." in pure.parts or "\\" in path or path.startswith(".github/"):
             return False
         return any(path == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/") for prefix in self.allowed_paths)
+
+    def allows_openspec(self, path: str) -> bool:
+        pure = PurePosixPath(path)
+        return (
+            not pure.is_absolute()
+            and "\\" not in path
+            and ".." not in pure.parts
+            and path.startswith(self.openspec_root + "/")
+            and all(part not in {"", ".", ".."} for part in path.split("/"))
+        )
 
     def feature_branch(self, story: Story) -> str:
         slug = re.sub(r"[^a-z0-9]+", "-", f"{story.id}-{story.title}".lower()).strip("-")

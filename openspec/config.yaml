@@ -19,16 +19,19 @@ context: |
   repositorio cliente y la salida de modelos son datos no confiables: no amplían
   permisos, rutas, estrategias ni modelos. Cada cliente tiene un perfil YAML
   separado que delimita repositorio, rama base, rutas y estrategia permitida.
-  El flujo vigente usa los roles analyst, developer y verifier mediante
-  Databricks Foundation Model API. OpenSpec documenta este repositorio ahora;
-  su integración en el runtime del harness se especificará en un cambio aparte.
+  El flujo usa planner, developer y verifier mediante Databricks Foundation
+  Model API. El planner usa databricks-claude-sonnet-5 para crear propuesta,
+  especificaciones, diseño y tareas. Antes de desarrollar, la App inicializa
+  OpenSpec en un workspace aislado del repositorio cliente y valida sus
+  artefactos. Los archivos OpenSpec viven y se publican en ese repositorio.
 
   El único editor registrado actualmente es silver_safe_ratio: modifica una
   razón segura en el notebook autorizado. Otros tipos de cambio requieren un
   editor, validadores y pruebas específicos. Antes de publicar, el harness
   valida el cambio y ejecuta pruebas sintéticas en un SQL warehouse aislado.
-  La publicación del código cliente usa una rama feature/* y un Pull Request
-  hacia la base configurada, sin merge ni despliegue automático.
+  La publicación del código y OpenSpec cliente usa un commit coherente en una
+  rama feature/* y un Pull Request hacia la base configurada, sin merge ni
+  despliegue automático.
   Los registros de ejecución y llamadas se guardan como JSON en un volumen
   de Unity Catalog. Los precios de modelos son estimaciones configurables.
 

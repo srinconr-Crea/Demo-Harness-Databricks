@@ -4,7 +4,7 @@
 
 ### Requirement: Secuencia de controles
 
-El harness SHALL exigir que la planificación OpenSpec validada, la propuesta del desarrollador, la validación del editor, la prueba remota y la revisión del verificador terminen satisfactoriamente antes de publicar. El desarrollador y el verificador SHALL recibir los artefactos de planificación validados del mismo intento.
+El harness SHALL exigir que la inicialización OpenSpec en el workspace cliente, la planificación validada, la propuesta del desarrollador, la validación del editor, la prueba remota y la revisión del verificador terminen satisfactoriamente antes de publicar. El desarrollador y el verificador SHALL recibir los artefactos de planificación validados del mismo intento.
 
 #### Scenario: Todos los controles aprobados
 - **WHEN** cada control produce un resultado válido y aprobatorio
@@ -16,6 +16,10 @@ El harness SHALL exigir que la planificación OpenSpec validada, la propuesta de
 
 #### Scenario: Planificación rechazada
 - **WHEN** el cambio OpenSpec no valida o contradice la política del perfil
+- **THEN** el desarrollador no se invoca y no se publica código cliente
+
+#### Scenario: Inicialización rechazada
+- **WHEN** OpenSpec no puede inicializarse en el workspace cliente
 - **THEN** el desarrollador no se invoca y no se publica código cliente
 
 #### Scenario: Verificación contra la especificación

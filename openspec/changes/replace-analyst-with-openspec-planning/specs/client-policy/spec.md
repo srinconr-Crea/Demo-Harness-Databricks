@@ -2,14 +2,14 @@
 
 ## ADDED Requirements
 
-### Requirement: Publicación OpenSpec autorizada por perfil
+### Requirement: Espacio OpenSpec autorizado por perfil
 
-El harness SHALL publicar artefactos OpenSpec en un repositorio cliente solo cuando el perfil habilite explícitamente las rutas de destino y SHALL aplicar a esas rutas el mismo rechazo de rutas absolutas, traversal y archivos fuera de política.
+El harness SHALL exigir que cada perfil declare un prefijo OpenSpec confiable para inicializar y publicar artefactos en el repositorio cliente. SHALL aplicar a esas rutas el mismo rechazo de rutas absolutas, traversal y archivos fuera de política.
 
-#### Scenario: Perfil habilitado
-- **WHEN** el perfil admite rutas OpenSpec concretas y el cambio supera los controles
-- **THEN** esas rutas pueden incorporarse al conjunto de archivos validados para el Pull Request
+#### Scenario: Perfil configurado
+- **WHEN** el perfil declara su prefijo OpenSpec y el cambio supera los controles
+- **THEN** solo los archivos bajo ese prefijo pueden incorporarse al Pull Request
 
-#### Scenario: Perfil sin habilitación
-- **WHEN** el perfil no habilita rutas OpenSpec
-- **THEN** la historia no amplía por sí misma la lista de archivos publicables y los artefactos quedan en el registro del harness
+#### Scenario: Perfil sin prefijo OpenSpec
+- **WHEN** el perfil no declara un prefijo OpenSpec válido
+- **THEN** el harness no inicia desarrollo ni publicación para esa historia

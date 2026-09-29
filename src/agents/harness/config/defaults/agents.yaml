@@ -5,9 +5,10 @@ max_tokens: 2000
 limits:
   source_excerpt_chars: 12000
 tasks:
-  analyst: >-
-    Confirma que la HU solicita una sola razón segura en el notebook configurado.
-    Responde valid (boolean), notes (texto) y evidence (lista de evidencias).
+  planner: >-
+    Redacta los artefactos OpenSpec de la HU conforme a las instrucciones de cada artefacto.
+    Devuelve content, strategy, code_path y expression. El manifiesto debe coincidir
+    exactamente con el perfil y la expresión determinista proporcionados.
   developer: >-
     Propón únicamente la expresión Python exacta en expression y explica en notes.
     No cambies otros campos; el editor determinista aplica el cambio.

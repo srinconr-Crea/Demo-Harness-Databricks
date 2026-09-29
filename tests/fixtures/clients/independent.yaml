@@ -9,6 +9,7 @@ ui:
   business_rules_hint: Defina una razón segura en la tabla configurada
 allowed_paths:
   - notebooks/independent/silver/
+openspec_root: openspec
 strategy:
   kind: silver_safe_ratio
   notebook: notebooks/independent/silver/derive.ipynb

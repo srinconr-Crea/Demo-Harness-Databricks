@@ -12,6 +12,7 @@ ui:
   validation_hint: Casos positivo, cero y NULL
 allowed_paths:
   - notebooks/comercial/silver/
+openspec_root: openspec
 strategy:
   kind: silver_safe_ratio
   notebook: notebooks/comercial/silver/04_business_derivations.ipynb

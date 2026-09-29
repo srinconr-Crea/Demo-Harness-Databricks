@@ -32,7 +32,7 @@ def test_one_manual_form_and_validation(tmp_path: Path):
 
 
 def test_configuration_exposes_display_hints_without_github_credentials(tmp_path: Path):
-    profile = ClientProfile(name="sample", repository="o/r", base_branch="develop", allowed_paths=["notebooks/"], github_app_id=123, ui={"display_name": "Sample"})
+    profile = ClientProfile(name="sample", repository="o/r", base_branch="develop", allowed_paths=["notebooks/"], openspec_root="openspec", github_app_id=123, ui={"display_name": "Sample"})
     app = create_app(tmp_path, runner=lambda story, run_id, attempt_id, control: {}, profile=profile)
     with TestClient(app) as client:
         response = client.get("/configuration")
@@ -41,8 +41,8 @@ def test_configuration_exposes_display_hints_without_github_credentials(tmp_path
 
 
 def test_same_story_in_another_profile_cannot_reuse_previous_clients_result(tmp_path: Path):
-    first = ClientProfile(name="first", repository="one/repo", base_branch="develop", allowed_paths=["notebooks/"])
-    second = ClientProfile(name="second", repository="two/repo", base_branch="develop", allowed_paths=["notebooks/"])
+    first = ClientProfile(name="first", repository="one/repo", base_branch="develop", allowed_paths=["notebooks/"], openspec_root="openspec")
+    second = ClientProfile(name="second", repository="two/repo", base_branch="develop", allowed_paths=["notebooks/"], openspec_root="openspec")
     with TestClient(create_app(tmp_path, runner=lambda story, run_id, attempt_id, control: {"pr_url": "https://github.com/one/repo/pull/1"}, profile=first)) as client:
         first_id = client.post("/run", json=payload()).json()["run_id"]
     with TestClient(create_app(tmp_path, runner=lambda story, run_id, attempt_id, control: {"pr_url": "https://github.com/two/repo/pull/1"}, profile=second)) as client:
@@ -89,6 +89,30 @@ def test_run_contract_records_hu_files_and_timestamps(tmp_path: Path):
         assert record["run_id"] == run_id
         assert record["attempts"][-1]["changed_files"] == ["notebooks/a.ipynb"]
         assert record["attempts"][-1]["result"]["pr_url"] == "example"
+
+
+def test_openspec_artifacts_are_joined_to_attempt_and_retrievable(tmp_path: Path):
+    def runner(story, run_id, attempt_id, control):
+        control.record_openspec_artifact("openspec/changes/hu/proposal.md", "proposal dapi12345678901234567890", "source-hash")
+        control.record_openspec(change_id="hu", state="validated")
+        return {"changed_files": ["openspec/changes/hu/proposal.md"]}
+
+    with TestClient(create_app(tmp_path, runner=runner)) as client:
+        run_id = client.post("/run", json=payload()).json()["run_id"]
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            record = client.get(f"/runs/{run_id}").json()
+            if record["state"] in {"complete", "failed"}:
+                break
+            time.sleep(0.02)
+        assert record["state"] == "complete", record.get("error") or record["state"]
+        attempt = record["attempts"][-1]
+        assert attempt["openspec"]["state"] == "validated"
+        artifact_id = attempt["openspec"]["artifacts"]["openspec/changes/hu/proposal.md"]["artifact_id"]
+        artifact = client.get(f"/runs/{run_id}/openspec/{attempt['attempt_id']}/{artifact_id}")
+        assert artifact.status_code == 200
+        assert "[REDACTED_TOKEN]" in artifact.json()["content"]
+        assert "dapi12345678901234567890" not in artifact.text
 
 
 def test_retry_preserves_legacy_failed_record_as_previous_attempt(tmp_path: Path):

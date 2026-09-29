@@ -1,10 +1,10 @@
-# Spec Delta
+# Change Planning Specification
 
 ## Purpose
 
 Definir la planificación OpenSpec que convierte cada historia autorizada en artefactos verificables antes de editar código cliente.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Inicialización previa en el repositorio cliente
 

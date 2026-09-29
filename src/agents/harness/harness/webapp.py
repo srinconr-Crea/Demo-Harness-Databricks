@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import uuid
+import hashlib
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
@@ -30,12 +31,14 @@ class CancelledRun(Exception):
 
 
 class RunControl:
-    def __init__(self, check_cancel, begin_publication, record_publication, record_changed_files, record_event):
+    def __init__(self, check_cancel, begin_publication, record_publication, record_changed_files, record_event, record_openspec_artifact, record_openspec):
         self.check_cancel = check_cancel
         self.begin_publication = begin_publication
         self.record_publication = record_publication
         self.record_changed_files = record_changed_files
         self.record_event = record_event
+        self.record_openspec_artifact = record_openspec_artifact
+        self.record_openspec = record_openspec
 
 
 def create_app(
@@ -135,7 +138,26 @@ def create_app(
                 record["attempts"][-1].setdefault("events", []).append({"at": _now(), "stage": stage, "status": status, **details})
                 save(run_id, record)
 
-        return RunControl(check_cancel, begin_publication, record_publication, record_changed_files, record_event)
+        def record_openspec_artifact(path: str, content: str, sha256: str) -> None:
+            artifact_id = hashlib.sha256(path.encode("utf-8")).hexdigest()[:24]
+            safe_content = sanitize_log_value(content, len(content))
+            store.save_openspec_artifact(run_id, attempt_id, artifact_id, {
+                "run_id": run_id, "attempt_id": attempt_id, "path": path,
+                "sha256": sha256, "stored_sha256": hashlib.sha256(safe_content.encode("utf-8")).hexdigest(),
+                "content": safe_content,
+            })
+            with lock:
+                record = current()
+                record["attempts"][-1].setdefault("openspec", {}).setdefault("artifacts", {})[path] = {"artifact_id": artifact_id, "sha256": sha256}
+                save(run_id, record)
+
+        def record_openspec(**details) -> None:
+            with lock:
+                record = current()
+                record["attempts"][-1].setdefault("openspec", {}).update(details)
+                save(run_id, record)
+
+        return RunControl(check_cancel, begin_publication, record_publication, record_changed_files, record_event, record_openspec_artifact, record_openspec)
 
     def execute(run_id: str, attempt_id: str, story: Story) -> None:
         with lock:
@@ -213,6 +235,21 @@ def create_app(
         if not result:
             raise HTTPException(status_code=404)
         return result
+
+    @app.get("/runs/{run_id}/openspec/{attempt_id}/{artifact_id}")
+    def openspec_artifact(run_id: str, attempt_id: str, artifact_id: str):
+        if any(len(value) != 32 or any(char not in "0123456789abcdef" for char in value) for value in (run_id, attempt_id)):
+            raise HTTPException(status_code=404)
+        if len(artifact_id) != 24 or any(char not in "0123456789abcdef" for char in artifact_id):
+            raise HTTPException(status_code=404)
+        record = store.load(run_id)
+        attempt = next((item for item in record.get("attempts", []) if item.get("attempt_id") == attempt_id), None) if record else None
+        if not attempt or artifact_id not in {item.get("artifact_id") for item in attempt.get("openspec", {}).get("artifacts", {}).values()}:
+            raise HTTPException(status_code=404)
+        artifact = store.load_openspec_artifact(run_id, attempt_id, artifact_id)
+        if artifact is None:
+            raise HTTPException(status_code=404)
+        return artifact
 
     @app.post("/runs/{run_id}/cancel", status_code=202)
     def cancel(run_id: str, request: Request):

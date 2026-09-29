@@ -1,6 +1,6 @@
 import io
 
-from harness.store import VolumeRunStore
+from harness.store import LocalRunStore, VolumeRunStore
 
 
 class FakeFiles:
@@ -42,3 +42,12 @@ def test_volume_store_lists_only_run_records():
     files.list_directory_contents = lambda path: [type("Entry", (), {"name": "run123.json", "is_directory": False})(), type("Entry", (), {"name": "agent_calls", "is_directory": True})()]
     store = VolumeRunStore(files, "/Volumes/harness/schema/artifacts/runs")
     assert store.list_runs() == ["run123"]
+
+
+def test_openspec_artifacts_are_isolated_by_attempt_in_local_and_volume_stores(tmp_path):
+    for store in (LocalRunStore(tmp_path), VolumeRunStore(FakeFiles(), "/Volumes/harness/schema/artifacts/runs")):
+        store.save_openspec_artifact("run123", "attempt001", "artifact001", {"content": "first"})
+        store.save_openspec_artifact("run123", "attempt002", "artifact001", {"content": "second"})
+        assert store.load_openspec_artifact("run123", "attempt001", "artifact001") == {"content": "first"}
+        assert store.load_openspec_artifact("run123", "attempt002", "artifact001") == {"content": "second"}
+        assert store.load_openspec_artifact("run123", "attempt003", "artifact001") is None

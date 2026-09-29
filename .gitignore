@@ -12,6 +12,7 @@ mlruns
 # Exclude local environment directory
 venv
 .venv/
+node_modules/
 .uv-cache/
 .pytest_cache/
 pytest-cache-files-*/

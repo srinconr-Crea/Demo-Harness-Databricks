@@ -1,0 +1,9 @@
+{
+  "name": "demo-harness-openspec-runtime",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pinned OpenSpec CLI for the Databricks harness app",
+  "dependencies": {
+    "@fission-ai/openspec": "1.13.2"
+  }
+}

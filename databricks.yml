@@ -16,8 +16,8 @@ variables:
     description: YAML client profile selected at runtime
   warehouse_id:
     description: Isolated SQL warehouse for synthetic validation
-  analyst_endpoint:
-    description: Foundation Model API endpoint for analyst and developer
+  sonnet_endpoint:
+    description: Foundation Model API endpoint for OpenSpec planner and developer
   verifier_endpoint:
     description: Foundation Model API endpoint for verifier
   github_secret_scope:
@@ -65,7 +65,7 @@ resources:
             permission: READ
         - name: sonnet-five
           serving_endpoint:
-            name: ${var.analyst_endpoint}
+            name: ${var.sonnet_endpoint}
             permission: CAN_QUERY
         - name: haiku-four-five
           serving_endpoint:
@@ -94,6 +94,7 @@ sync:
     - src/agents/**/__pycache__/**
     - src/agents/**/*.pyc
     - src/agents/**/.venv/**
+    - src/agents/**/node_modules/**
 
 targets:
   dev:
@@ -107,7 +108,7 @@ targets:
       app_name: demo-dbx-harness-mvp
       client_profile: naturapet
       warehouse_id: 9e696889dea65361
-      analyst_endpoint: databricks-claude-sonnet-5
+      sonnet_endpoint: databricks-claude-sonnet-5
       verifier_endpoint: databricks-claude-haiku-4-5
       github_secret_scope: demo-harness-databricks
       github_secret_key: github-app-private-key

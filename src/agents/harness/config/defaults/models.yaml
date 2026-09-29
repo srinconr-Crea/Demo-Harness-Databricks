@@ -1,5 +1,5 @@
 routing:
-  analyst: databricks-claude-sonnet-5
+  planner: databricks-claude-sonnet-5
   developer: databricks-claude-sonnet-5
   verifier: databricks-claude-haiku-4-5
 pricing:

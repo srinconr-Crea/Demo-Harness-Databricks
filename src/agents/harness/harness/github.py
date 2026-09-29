@@ -101,10 +101,40 @@ class GitHubAppClient:
             raise ValueError("La ruta solicitada no es un archivo")
         return base64.b64decode(data["content"]).decode("utf-8"), data["sha"]
 
-    def _verify_branch_diff(self, repository: str, branch: str, base_sha: str, files: dict[str, tuple[str, str]]) -> None:
+    def read_openspec_files(self, base_sha: str) -> dict[str, tuple[str, str]]:
+        """Read the client's existing OpenSpec tree from the validated base commit."""
+        commit = self._request("GET", f"/repos/{self.repository}/git/commits/{base_sha}")
+        tree_sha = commit.get("tree", {}).get("sha")
+        if not tree_sha:
+            raise ValueError("El commit base no contiene un árbol Git válido")
+        tree = self._request("GET", f"/repos/{self.repository}/git/trees/{tree_sha}?recursive=1")
+        if tree.get("truncated"):
+            raise ValueError("El árbol Git del cliente está truncado")
+        paths = []
+        for entry in tree.get("tree", []):
+            path = entry.get("path", "")
+            if not path.startswith("openspec/"):
+                continue
+            if entry.get("type") != "blob" or ".." in path.split("/") or "\\" in path:
+                raise ValueError("Ruta OpenSpec no válida en el repositorio cliente")
+            if not path.endswith((".md", ".yaml", ".yml", ".gitkeep")):
+                raise ValueError("Archivo OpenSpec no admitido en el repositorio cliente")
+            paths.append(path)
+        if len(paths) > 300:
+            raise ValueError("Demasiados archivos OpenSpec en el repositorio cliente")
+        if sum(entry.get("size", 0) or 0 for entry in tree.get("tree", []) if entry.get("path") in paths) > 4_000_000:
+            raise ValueError("El contexto OpenSpec del cliente excede el límite")
+        result = {path: self.read_file(path, ref=base_sha) for path in paths}
+        if sum(len(content.encode("utf-8")) for content, _sha in result.values()) > 4_000_000:
+            raise ValueError("El contexto OpenSpec del cliente excede el límite")
+        return result
+
+    def _verify_branch_diff(self, repository: str, branch: str, base_sha: str, files: dict[str, tuple[str, str | None]]) -> None:
         comparison = self._request("GET", f"/repos/{repository}/compare/{base_sha}...{quote(branch, safe='/')}")
         if comparison.get("merge_base_commit", {}).get("sha") != base_sha:
             raise ValueError("La rama feature no nació del commit base validado")
+        if len(comparison.get("files", [])) >= 300:
+            raise ValueError("La comparación de la rama feature puede estar truncada")
         changed = {item.get("filename") for item in comparison.get("files", [])}
         if changed != set(files):
             raise ValueError("La rama feature contiene archivos adicionales o faltantes")
@@ -117,14 +147,14 @@ class GitHubAppClient:
         title: str,
         body: str,
         base_sha: str,
-        files: dict[str, tuple[str, str]],
+        files: dict[str, tuple[str, str | None]],
         *,
         on_progress: Callable[..., None] | None = None,
     ) -> str:
         self._check_repo(repository)
         if base_branch != self.base_branch or not branch.startswith("feature/") or ".." in branch:
             raise ValueError("Rama Git fuera de política")
-        if not files or any(path.startswith(("/", ".github/")) or ".." in path.split("/") for path in files):
+        if not files or any(path.startswith(("/", ".github/")) or ".." in path.split("/") or "\\" in path or "//" in path for path in files):
             raise ValueError("Ruta de publicación fuera de política")
         owner = repository.split("/", 1)[0]
         existing = self._request("GET", f"/repos/{repository}/pulls", params={"head": f"{owner}:{branch}", "base": base_branch, "state": "open"})
@@ -139,41 +169,41 @@ class GitHubAppClient:
                 on_progress("pr_created", pr_url=url, branch=branch, reused=True)
             return url
         ref_path = f"/repos/{repository}/git/ref/heads/{quote(branch, safe='/')}"
+        branch_exists = False
         try:
             ref = self._request("GET", ref_path)
         except httpx.HTTPStatusError as error:
             if error.response.status_code != 404:
                 raise
-            self._request("POST", f"/repos/{repository}/git/refs", json={"ref": f"refs/heads/{branch}", "sha": base_sha})
-            if on_progress:
-                on_progress("branch_created", branch=branch, base_sha=base_sha)
         else:
-            if on_progress:
-                on_progress("branch_created", branch=branch, base_sha=base_sha, reused=True)
+            branch_exists = True
             if ref["object"]["sha"] != base_sha:
                 self._verify_branch_diff(repository, branch, base_sha, files)
-                if len(files) != 1:
-                    raise ValueError("La rama feature existente divergió del commit base")
-                only_path, (expected_content, _) = next(iter(files.items()))
-                current_content, _ = self.read_file(only_path, ref=branch)
-                if current_content != expected_content:
-                    raise ValueError("La rama feature existente tiene cambios distintos")
+                for path, (expected_content, _) in files.items():
+                    current_content, _ = self.read_file(path, ref=branch)
+                    if current_content != expected_content:
+                        raise ValueError("La rama feature existente tiene cambios distintos")
                 pr = self._request("POST", f"/repos/{repository}/pulls", json={"title": title, "head": branch, "base": base_branch, "body": body, "draft": False})
                 if on_progress:
                     on_progress("pr_created", pr_url=pr["html_url"], branch=branch)
                 return pr["html_url"]
-        for path, (content, source_sha) in files.items():
-            updated = self._request(
-                "PUT", f"/repos/{repository}/contents/{quote(path, safe='/')}",
-                json={
-                    "message": f"feat: {title}",
-                    "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
-                    "sha": source_sha,
-                    "branch": branch,
-                },
-            )
-            if on_progress:
-                on_progress("file_pushed", branch=branch, path=path, commit_sha=updated.get("commit", {}).get("sha"))
+        base_commit = self._request("GET", f"/repos/{repository}/git/commits/{base_sha}")
+        base_tree = base_commit.get("tree", {}).get("sha")
+        if not base_tree:
+            raise ValueError("El commit base no contiene un árbol Git válido")
+        entries = []
+        for path, (content, _source_sha) in sorted(files.items()):
+            blob = self._request("POST", f"/repos/{repository}/git/blobs", json={"content": content, "encoding": "utf-8"})
+            entries.append({"path": path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
+        tree = self._request("POST", f"/repos/{repository}/git/trees", json={"base_tree": base_tree, "tree": entries})
+        commit = self._request("POST", f"/repos/{repository}/git/commits", json={"message": f"feat: {title}", "tree": tree["sha"], "parents": [base_sha]})
+        if branch_exists:
+            self._request("PATCH", f"/repos/{repository}/git/refs/heads/{quote(branch, safe='/')}", json={"sha": commit["sha"], "force": False})
+        else:
+            self._request("POST", f"/repos/{repository}/git/refs", json={"ref": f"refs/heads/{branch}", "sha": commit["sha"]})
+        if on_progress:
+            on_progress("branch_created", branch=branch, base_sha=base_sha, commit_sha=commit["sha"], reused=branch_exists)
+            on_progress("files_pushed", branch=branch, paths=sorted(files), commit_sha=commit["sha"])
         pr = self._request("POST", f"/repos/{repository}/pulls", json={"title": title, "head": branch, "base": base_branch, "body": body, "draft": False})
         if on_progress:
             on_progress("pr_created", pr_url=pr["html_url"], branch=branch)
