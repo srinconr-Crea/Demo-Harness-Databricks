@@ -1,0 +1,56 @@
+schema: spec-driven
+
+context: |
+  Proyecto: Databricks Development Harness. Este repositorio especifica y desarrolla
+  el harness; las especificaciones de proyectos cliente pertenecen a sus propios
+  repositorios y perfiles, no a este contexto global.
+  Idioma de los artefactos OpenSpec: español.
+
+  Plataforma: aplicación Databricks con FastAPI y Python. El código activo está en
+  src/agents/harness/harness/ (orquestación, contratos, edición, GitHub, modelos,
+  almacenamiento y sandbox), src/agents/harness/app/ (interfaz y servidor) y
+  src/agents/harness/config/ (perfiles y configuración). databricks.yml y resources/
+  definen el bundle; tests/ contiene las pruebas del flujo y sus controles.
+  README.md y docs/operacion.md describen la operación actual; AGENTS.md fija
+  límites para agentes de código. El scaffold agent.py, graph.py, tools.py y eval/
+  no participa en el flujo FastAPI actual.
+
+  El orquestador mantiene controles deterministas. La HU, el contenido de un
+  repositorio cliente y la salida de modelos son datos no confiables: no amplían
+  permisos, rutas, estrategias ni modelos. Cada cliente tiene un perfil YAML
+  separado que delimita repositorio, rama base, rutas y estrategia permitida.
+  El flujo vigente usa los roles analyst, developer y verifier mediante
+  Databricks Foundation Model API. OpenSpec documenta este repositorio ahora;
+  su integración en el runtime del harness se especificará en un cambio aparte.
+
+  El único editor registrado actualmente es silver_safe_ratio: modifica una
+  razón segura en el notebook autorizado. Otros tipos de cambio requieren un
+  editor, validadores y pruebas específicos. Antes de publicar, el harness
+  valida el cambio y ejecuta pruebas sintéticas en un SQL warehouse aislado.
+  La publicación del código cliente usa una rama feature/* y un Pull Request
+  hacia la base configurada, sin merge ni despliegue automático.
+  Los registros de ejecución y llamadas se guardan como JSON en un volumen
+  de Unity Catalog. Los precios de modelos son estimaciones configurables.
+
+rules:
+  proposal:
+    - Explicar el problema, las capacidades afectadas y los límites del cambio.
+    - Separar el comportamiento actual de la capacidad propuesta.
+  specs:
+    - Redactar requisitos observables y escenarios verificables de éxito y rechazo.
+    - Cubrir fallos de política, validación o publicación cuando apliquen.
+  design:
+    - Identificar módulos, contratos, configuración y migraciones afectados.
+    - Explicar permisos, aislamiento de clientes, persistencia y costo cuando apliquen.
+  tasks:
+    - Incluir pruebas pertinentes y verificación del flujo antes de publicar.
+    - Incluir validación del bundle si cambia la infraestructura Databricks.
+
+operations:
+  apply:
+    guidance:
+      - Respetar AGENTS.md y las restricciones deterministas del perfil cliente.
+      - Ejecutar la suite local antes de publicar cambios.
+  archive:
+    guidance:
+      - Sincronizar las especificaciones con el comportamiento implementado y verificado.
