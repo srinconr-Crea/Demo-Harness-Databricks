@@ -17,7 +17,7 @@ Los flujos OpenSpec usan `databricks-claude-sonnet-5`; el desarrollador opera en
 
 El volumen Unity Catalog conserva JSON de ejecuciones, eventos y llamadas por modelo, más checkpoints exactos y diffs de revisión con ACL restringidas. La tabla Delta del harness coordina revisiones y leases. El costo por llamada es estimado cuando el endpoint entrega `usage`.
 
-La App puede publicarse provisionalmente sin el Job dedicado; la [guía de operación](docs/operacion.md) incluye ese procedimiento. La identidad del Job, las pruebas completas de interfaz y la preparación del cliente permanecen pendientes.
+El Job dedicado ya tiene una identidad separada y pruebas sintéticas positivas y negativas verificadas. El flujo completo de interfaz se comprobó con un cliente local sintético y la CLI real de OpenSpec; véase la [evidencia](docs/evidence/2026-09-30-openspec/verification.md). Cada cliente debe integrar su PR de preparación y configurar sus rutas y pruebas antes de habilitar HUs generales.
 
 ## Estructura
 

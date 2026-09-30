@@ -92,6 +92,12 @@ const eventsEl=document.getElementById('events'), reviewEl=document.getElementBy
 const actionsEl=document.getElementById('review-actions'), artifactsEl=document.getElementById('artifacts');
 const feedback=document.getElementById('feedback'), feedbackLabel=document.getElementById('feedback-label');
 let runId=new URLSearchParams(location.search).get('run'), current=null, eventCursor=0, timer=null, lastReviewKey='', lastLiveArtifactKey='';
+const stageLabels={queued:'En cola',running:'En proceso',exploring:'Explorando la HU',awaiting_clarification:'Esperando aclaración',proposing:'Preparando el plan',awaiting_plan_review:'Esperando revisión del plan',updating:'Actualizando el plan',applying:'Aplicando cambios',verifying:'Verificando',preparing_final_diff:'Preparando el diff',awaiting_diff_review:'Esperando revisión del diff',publishing:'Creando el PR',complete:'Completado',failed:'Falló',cancelled:'Cancelado'};
+const eventLabels={explore:'Exploración',clarification:'Respuesta recibida',artifact_ready:'Artefacto disponible',propose:'Plan preparado',update:'Plan actualizado',plan_changes:'Cambios pedidos al plan',plan_approved:'Plan aprobado',apply:'Cambios aplicados',verify:'Verificación',verify_failed:'Se requiere una corrección',sync:'Specs sincronizados',archive:'Cambio OpenSpec archivado',diff_ready:'Diff listo para revisión',diff_changes:'Cambios pedidos al diff',diff_approved:'Diff aprobado',pr_created:'PR creado',error:'Error de la etapa',base_advanced:'La rama base cambió'};
+eventLabels.publication_complete='Publicación completada';
+eventLabels.verify_findings='Hallazgos de verificación';
+function actionStatus(text,isError=false){const target=document.getElementById('action-error');target.className=isError?'error':'muted';target.textContent=text;}
+function eventDescription(event){const d=event.details||{};if(d.summary)return d.summary;if(d.text)return d.text;if(d.message)return d.message;if(event.kind==='artifact_ready')return d.path||'Archivo disponible para revisión.';if(event.kind==='verify'||event.kind==='verify_failed'){const evidence=d.evidence||{};return (evidence.passed?'Las pruebas y verificaciones pasaron.':'Las pruebas requieren una corrección.')+'\n'+(evidence.evidence||[]).join('\n');}if(event.kind==='verify_findings')return (d.findings||[]).map(item=>typeof item==='string'?item:item.message||item.description||JSON.stringify(item)).join('\n');if(event.kind==='apply')return (d.paths||[]).join('\n');if(event.kind==='diff_ready')return 'Revisa el código y OpenSpec antes de permitir la creación del PR.';if(event.kind==='plan_approved'||event.kind==='diff_approved')return 'Aprobación registrada para esta revisión.';if(event.kind==='propose'||event.kind==='update')return 'Propuesta, specs, diseño y tareas disponibles para revisión.';if(event.kind==='sync')return 'Las especificaciones del cliente reflejan el cambio verificado.';if(event.kind==='archive')return 'El historial OpenSpec forma parte del diff final.';if(event.kind==='pr_created'||event.kind==='publication_complete')return d.pr_url||'El PR queda pendiente de revisión humana.';return 'Etapa registrada.';}
 
 function node(tag,text,klass) {const element=document.createElement(tag);if(text!==undefined) element.textContent=text;if(klass) element.className=klass;return element;}
 async function jsonRequest(path,options) {const response=await fetch(path,options);const body=await response.json();if(!response.ok) throw Error(typeof body.detail==='string'?body.detail:JSON.stringify(body.detail));return body;}
@@ -128,6 +134,7 @@ function showReview(run) {
   const reviewKey=run.run_id+':'+stage+':'+attempt.revision+':'+(attempt.context?.candidate_hash||attempt.context?.plan_hash||'');
   if(reviewKey===lastReviewKey) return;
   lastReviewKey=reviewKey;
+  actionStatus('');
   reviewEl.hidden=!['awaiting_clarification','awaiting_plan_review','awaiting_diff_review'].includes(stage);
   actionsEl.replaceChildren();artifactsEl.replaceChildren();feedback.value='';feedbackLabel.hidden=true;
   document.getElementById('diff-panel').hidden=true;
@@ -151,22 +158,22 @@ async function showCalls() {
   try {const data=await jsonRequest('/runs/'+runId+'/calls');const target=document.getElementById('calls');target.replaceChildren();
     if(!data.calls.length){target.textContent='Esperando llamadas…';return;}
     const table=node('table'), head=node('tr');for(const label of ['Etapa','Rol / modelo','Tokens entrada / salida','USD estimados','Estado']) head.append(node('th',label));table.append(head);
-    for(const call of data.calls){const row=node('tr');for(const value of [call.stage||'—',(call.role||'')+' / '+(call.model||''),(call.input_tokens??'—')+' / '+(call.output_tokens??'—'),call.estimated_cost_usd??'no disponible',call.status||'—']) row.append(node('td',String(value)));table.append(row);}target.append(table);
+    for(const call of data.calls.sort((a,b)=>(a.started_at||'').localeCompare(b.started_at||''))){const row=node('tr');for(const value of [stageLabels[call.stage]||call.stage||'—',(call.role||'')+' / '+(call.model||''),(call.input_tokens??'—')+' / '+(call.output_tokens??'—'),call.estimated_cost_usd??'no disponible',call.status||'—']) row.append(node('td',String(value)));table.append(row);}target.append(table);
   }catch(error){document.getElementById('calls').textContent='Costos no disponibles: '+error.message;}
 }
 async function poll() {
   if(!runId) return;
   try {
     const run=await jsonRequest('/runs/'+runId);current=run;document.getElementById('conversation').hidden=false;
-    const attempt=run.attempts.at(-1);stateEl.textContent=run.state;document.getElementById('story-id').textContent=run.story_id;document.getElementById('revision').textContent=attempt.revision;
+    const attempt=run.attempts.at(-1);stateEl.textContent=stageLabels[run.state]||run.state;document.getElementById('story-id').textContent=run.story_id;document.getElementById('revision').textContent=attempt.revision;
     showMessages(attempt);showReview(run);showLiveArtifacts(attempt);await showCalls();
     const page=await jsonRequest('/runs/'+runId+'/events?after='+eventCursor+'&limit=100');
-    for(const event of page.events){const card=node('div',undefined,'event');card.append(node('strong',event.kind+' · '+(event.stage||'')));card.append(node('span',JSON.stringify(event.details||{})));eventsEl.append(card);}eventCursor=page.next;
+    for(const event of page.events){const card=node('div',undefined,'event');card.append(node('strong',(eventLabels[event.kind]||event.kind)+' · Revisión '+event.revision));card.append(node('span',eventDescription(event)));const data=node('details');data.append(node('summary','Ver datos de la etapa'),node('pre',JSON.stringify(event.details||{},null,2)));card.append(data);eventsEl.append(card);}eventCursor=page.next;
     const publication=document.getElementById('publication');publication.replaceChildren();
     if(run.state==='complete'&&run.result?.pr_url?.startsWith('https://github.com/')){publication.append(node('p','PR creado; revisión humana pendiente. Checks: '+(run.result.pr_checks||'unavailable')));const link=node('a','Abrir PR');link.href=run.result.pr_url;link.target='_blank';link.rel='noopener noreferrer';publication.append(link);}
     const recovery=document.getElementById('recovery');recovery.replaceChildren();const last=(attempt.timeline||[]).at(-1);
     if(['queued','running'].includes(run.state)&&last?.kind==='error'){const control=node('button','Reintentar etapa','secondary');control.type='button';control.addEventListener('click',async()=>{control.disabled=true;try{await jsonRequest('/runs/'+runId+'/retry',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expected_revision:attempt.revision})});document.getElementById('action-error').textContent='Reintento solicitado.';}catch(error){document.getElementById('action-error').textContent=error.message;control.disabled=false;}});recovery.append(control);}
-  }catch(error){document.getElementById('action-error').textContent=error.message;}
+  }catch(error){actionStatus(error.message,true);}
   timer=setTimeout(poll,2500);
 }
 async function sendAction(kind) {
@@ -174,8 +181,8 @@ async function sendAction(kind) {
   const expectedHash=stage==='awaiting_diff_review'?attempt.context?.candidate_hash:stage==='awaiting_plan_review'?attempt.context?.plan_hash:null;
   const payload={action:kind,expected_revision:attempt.revision,idempotency_key:crypto.randomUUID().replaceAll('-',''),expected_hash:expectedHash,text:kind==='answer'||kind==='changes'?feedback.value:null};
   for(const item of actionsEl.querySelectorAll('button')) item.disabled=true;
-  try {await jsonRequest('/runs/'+runId+'/actions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});document.getElementById('action-error').textContent='Acción enviada. Esperando la siguiente etapa…';}
-  catch(error){document.getElementById('action-error').textContent=error.message;for(const item of actionsEl.querySelectorAll('button')) item.disabled=false;}
+  try {await jsonRequest('/runs/'+runId+'/actions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});actionStatus('Acción enviada. Esperando la siguiente etapa…');}
+  catch(error){actionStatus(error.message,true);for(const item of actionsEl.querySelectorAll('button')) item.disabled=false;}
 }
 form.addEventListener('submit',async event=>{event.preventDefault();const submit=form.querySelector('button');submit.disabled=true;document.getElementById('form-error').textContent='';
   try {const payload=Object.fromEntries(new FormData(form).entries());const data=await jsonRequest('/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});runId=data.run_id;history.replaceState(null,'','?run='+runId);eventCursor=0;lastReviewKey='';lastLiveArtifactKey='';eventsEl.replaceChildren();clearTimeout(timer);poll();}

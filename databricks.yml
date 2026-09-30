@@ -149,3 +149,4 @@ targets:
       verifier_endpoint: databricks-claude-haiku-4-5
       github_secret_scope: demo-harness-databricks
       github_secret_key: github-app-private-key
+      sandbox_service_principal: dac4cb01-380f-4af5-b594-132d6d693beb

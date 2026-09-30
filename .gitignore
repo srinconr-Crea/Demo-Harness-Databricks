@@ -23,6 +23,7 @@ pytest-cache-files-*/
 ui_preview_local.py
 .pytest_tmp/
 tests/tmp_pytest/
+output/playwright/
 # Exclude local distribution/packaging directories
 *.egg-info/
 build

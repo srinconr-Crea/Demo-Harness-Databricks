@@ -307,4 +307,7 @@ def test_pr_identity_survives_failure_after_pr_creation(tmp_path: Path):
     assert saved["publication"]["pr_url"] == "https://github.com/example/client/pull/7"
     assert saved["publication"]["commit_sha"] == "c" * 40
     engine.advance(run_id)
-    assert store.load(run_id)["state"] == "complete"
+    completed = store.load(run_id)
+    assert completed["state"] == "complete"
+    assert completed["attempts"][-1]["publication"]["commit_sha"] == "c" * 40
+    assert completed["attempts"][-1]["timeline"][-1]["kind"] == "publication_complete"

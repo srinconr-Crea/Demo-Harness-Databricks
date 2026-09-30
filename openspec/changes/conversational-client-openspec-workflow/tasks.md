@@ -28,7 +28,7 @@
 
 - [x] 4.1 Añadir `general_patch` al perfil y al registro de estrategias con allowlist de rutas, extensiones, operaciones, límites y validadores; verificar rechazo de configuraciones ausentes o ampliadas desde la HU.
 - [x] 4.2 Implementar el aplicador de operaciones de archivo tipadas y comparación final contra la base, conservando el editor `silver_safe_ratio`; verificar creación, modificación, borrado admitido y rechazo de traversal, `.github/`, enlaces y binarios no admitidos.
-- [ ] 4.3 Configurar adaptadores de pruebas confiables por perfil y ejecutarlos en un sandbox sin secretos de la App, con tiempo y recursos limitados; verificar rechazo de comandos pedidos por el repo y ausencia de credenciales en el entorno de pruebas.
+- [x] 4.3 Configurar adaptadores de pruebas confiables por perfil y ejecutarlos en un sandbox sin secretos de la App, con tiempo y recursos limitados; verificar rechazo de comandos pedidos por el repo y ausencia de credenciales en el entorno de pruebas.
 - [x] 4.4 Integrar validación de sintaxis/estructura y evidencia de pruebas en `verify`; verificar que un tipo de HU sin comprobación obligatoria queda como no verificado y no puede publicarse.
 - [x] 4.5 Documentar en los perfiles de ejemplo y `docs/operacion.md` cómo habilitar un tipo de cambio general y sus pruebas; verificar que el ejemplo sintético pasa y que `silver_safe_ratio` conserva sus pruebas existentes.
 
@@ -36,9 +36,9 @@
 
 - [x] 5.1 Cambiar `/run` a HU y descripción, generar identidad interna y añadir endpoints de mensajes, eventos paginados y acciones por estado con revisión esperada; verificar entradas, autorización, idempotencia y decisiones atrasadas con pruebas FastAPI.
 - [x] 5.2 Implementar estados `awaiting_clarification`, `awaiting_plan_review` y `awaiting_diff_review` persistentes; verificar que el reinicio conserva la espera, los artefactos y la identidad de quien responde.
-- [ ] 5.3 Reemplazar el formulario de siete campos por dos campos y una vista de conversación con progreso incremental, artefactos, pruebas, modelo/costo y diff; verificar el flujo completo de aclaración y revisión en prueba de interfaz.
+- [x] 5.3 Reemplazar el formulario de siete campos por dos campos y una vista de conversación con progreso incremental, artefactos, pruebas, modelo/costo y diff; verificar el flujo completo de aclaración y revisión en prueba de interfaz.
 - [x] 5.4 Añadir controles de aprobar, pedir cambios y cancelar válidos para cada etapa; verificar que la UI invalida aprobaciones anteriores, muestra errores y no interpreta HTML de la HU o del modelo.
-- [ ] 5.5 Actualizar `README.md` y `docs/operacion.md` con estados, acciones y recuperación de la App; verificar las respuestas JSON y capturas del flujo en un entorno de prueba.
+- [x] 5.5 Actualizar `README.md` y `docs/operacion.md` con estados, acciones y recuperación de la App; verificar las respuestas JSON y capturas del flujo en un entorno de prueba.
 
 ## 6. Candidato final y publicación
 

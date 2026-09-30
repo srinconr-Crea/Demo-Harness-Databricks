@@ -454,7 +454,7 @@ class ConversationEngine:
                 return "exploring"
             branch = f"feature/{re.sub(r'[^a-z0-9-]+', '-', story.hu.lower()).strip('-')[:60]}-{attempt['attempt_id'][:8]}"
             publish_files = {path: (contents.decode("utf-8") if contents is not None else None, None) for path, contents in files.items()}
-            attempt["publication"] = {"stage": "publishing", "branch": branch}
+            attempt["publication"] = {**attempt.get("publication", {}), "stage": "publishing", "branch": branch}
 
             def publication_progress(stage: str, **details) -> None:
                 attempt["publication"] = {**attempt["publication"], "stage": stage,
@@ -470,12 +470,12 @@ class ConversationEngine:
                 on_progress=publication_progress,
             )
             checks = github.pr_check_status(self.profile.repository, branch)
-            attempt["publication"] = {"stage": "pr_created", "branch": branch, "pr_url": url}
+            attempt["publication"] = {**attempt["publication"], "stage": "pr_created", "branch": branch, "pr_url": url}
             attempt["result"] = {"pr_url": url, "branch": branch, "pr_checks": checks,
                                  "changed_files": sorted(files), "candidate_hash": approved["sha256"]}
             record["result"] = attempt["result"]
             record["changed_files"] = sorted(files)
-            self._event(attempt, "pr_created", pr_url=url, checks=checks)
+            self._event(attempt, "publication_complete", pr_url=url, checks=checks)
             return "complete"
         raise ValueError("Etapa conversacional no reconocida")
 

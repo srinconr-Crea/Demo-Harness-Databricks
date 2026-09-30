@@ -6,6 +6,18 @@ El bundle `databricks.yml` usa el catálogo `demo_harness_databricks_dev`, un vo
 
 La clave PEM de la GitHub App vive en el secret scope `demo-harness-databricks` y no se copia a Git, prompts ni Job. El Job `demo_harness_sandbox` requiere una identidad de servicio **dedicada**, distinta de la App y de cualquier identidad del cliente. En el bundle, sustituir `SET_DEDICATED_SANDBOX_SERVICE_PRINCIPAL` mediante la variable `sandbox_service_principal` antes de desplegar. Conceder a esa identidad solo `READ_VOLUME` y `WRITE_VOLUME` sobre `demo_harness_sandbox`; no conceder acceso al volumen de registros, al secreto GitHub, a endpoints de modelos ni a los recursos del cliente. La App recibe `CAN_MANAGE_RUN` sobre el Job y `READ_VOLUME`/`WRITE_VOLUME` sobre el volumen sandbox. Revisar estas concesiones en el plan del bundle y en Unity Catalog antes del despliegue.
 
+El entorno `dev` ya configura la identidad `demo_harness_sandbox`
+(`dac4cb01-380f-4af5-b594-132d6d693beb`) y el Job `611081415041874`.
+Las pruebas reales positivas y negativas y el recorrido de interfaz constan
+en la [evidencia de verificación](evidence/2026-09-30-openspec/verification.md).
+El despliegue inicial requirió `USE_CATALOG` y `USE_SCHEMA` en el catálogo y
+esquema del harness, además de los grants del volumen declarados en el bundle.
+La identidad necesita `CAN_READ` solo sobre el archivo Workspace
+`src/agents/harness/app/sandbox_job_runner.py` dentro de los archivos del bundle;
+comprobar ese ACL si se recrea el archivo. El usuario que configura `run_as`
+necesita el rol Service Principal User sobre la identidad dedicada, conservando
+los demás roles existentes según el [procedimiento oficial](https://learn.microsoft.com/en-us/azure/databricks/security/auth/access-control/service-principal-acl).
+
 ```powershell
 databricks auth describe --profile CREA_DEV
 databricks bundle validate --strict -t dev --profile CREA_DEV
@@ -34,9 +46,9 @@ databricks apps start demo-dbx-harness-mvp --profile CREA_DEV
 databricks apps deploy demo-dbx-harness-mvp --profile CREA_DEV --json @.databricks/app-only-deployment.json
 ```
 
-Permanecen pendientes la prueba completa de interfaz, la preparación OpenSpec
-del cliente con merge humano y la ejecución real del sandbox. Los checkboxes
-correspondientes siguen abiertos en el cambio OpenSpec.
+Este procedimiento provisional se conserva como alternativa cuando el sandbox
+no esté disponible. En `dev` el Job ya está desplegado y probado; la preparación
+OpenSpec de cada cliente y su merge humano siguen siendo pasos de incorporación.
 
 ## Incorporación única de un cliente
 
@@ -60,7 +72,7 @@ Las acciones se envían a `POST /runs/{run_id}/actions` con `action`, `expected_
 
 `general_patch` declara `allowed_paths`, `extensions`, `operations`, `max_files`, `max_bytes`, `test_adapters` y `test_paths`. Un perfil debe habilitar pruebas ejecutables (`pytest_sandbox`) para código o archivos de datos que puedan alterar el programa. Los objetivos `test_paths` son configurados por el operador y deben existir en el checkout cliente; la HU no puede cambiarlos. El Job recibe un ZIP acotado por archivos y bytes, verifica su SHA-256, extrae sin enlaces ni traversal y ejecuta pytest con un entorno sin secretos de la App, tiempo máximo y salida acotada. Si el Job no está configurado o falla, la publicación queda bloqueada. Para documentación Markdown se exige estructura; para Python y notebooks se comprueba sintaxis; JSON y YAML se analizan antes de las pruebas.
 
-El perfil piloto existente mantiene `silver_safe_ratio` y su prueba SQL de tres casos: positivo, cero y NULL. Para un cliente general, copiar el ejemplo sintético de `tests/fixtures/clients/general.yaml`, adaptar repositorio, rutas y pruebas, y configurar una instalación GitHub App exclusiva. El perfil actual desplegado todavía no habilita `general_patch`; se activa por cliente cuando sus pruebas y el Job dedicado están disponibles. La HU no debe contener comandos de pruebas ni rutas que amplíen el perfil. El scaffold `agent.py`, `graph.py`, `tools.py` y `eval/` no ejecuta el flujo FastAPI.
+El perfil piloto existente mantiene `silver_safe_ratio` y su prueba SQL de tres casos: positivo, cero y NULL. Para un cliente general, copiar el ejemplo sintético de `tests/fixtures/clients/general.yaml`, adaptar repositorio, rutas y pruebas, y configurar una instalación GitHub App exclusiva. El perfil actual desplegado todavía no habilita `general_patch`; se activa por cliente cuando sus pruebas estén configuradas. El Job dedicado ya está disponible en `dev`. La HU no debe contener comandos de pruebas ni rutas que amplíen el perfil. El scaffold `agent.py`, `graph.py`, `tools.py` y `eval/` no ejecuta el flujo FastAPI.
 
 ## Registros, costos y retención
 

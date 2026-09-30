@@ -12,3 +12,8 @@ resources:
       name: demo_harness_sandbox
       volume_type: MANAGED
       comment: "Isolated input and test evidence for client code checks"
+      grants:
+        - principal: ${var.sandbox_service_principal}
+          privileges: [READ_VOLUME, WRITE_VOLUME]
+        - principal: ${resources.apps.harness.service_principal_client_id}
+          privileges: [READ_VOLUME, WRITE_VOLUME]

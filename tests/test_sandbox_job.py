@@ -9,6 +9,18 @@ import pytest
 from harness.sandbox_job import SandboxJobRunner
 
 
+def test_managed_sandbox_grants_keep_app_and_job_access_on_redeployment():
+    """Managed UC grants must retain permissions also added by App bindings."""
+    import yaml
+
+    repository = Path(__file__).resolve().parents[1]
+    volume = yaml.safe_load((repository / "resources/volumes.yml").read_text())["resources"]["volumes"]["sandbox"]
+    grants = {entry["principal"]: set(entry["privileges"]) for entry in volume["grants"]}
+    assert set(grants) == {"${var.sandbox_service_principal}",
+                           "${resources.apps.harness.service_principal_client_id}"}
+    assert all(privileges == {"READ_VOLUME", "WRITE_VOLUME"} for privileges in grants.values())
+
+
 class Files:
     def __init__(self):
         self.values = {}
