@@ -20,4 +20,3 @@ El harness SHALL validar el resultado con controles de su estrategia y comparar 
 #### Scenario: Hash previo divergente
 - **WHEN** una modificación o eliminación no coincide con los bytes esperados
 - **THEN** se rechaza el conjunto sin aplicar parcialmente operaciones
-

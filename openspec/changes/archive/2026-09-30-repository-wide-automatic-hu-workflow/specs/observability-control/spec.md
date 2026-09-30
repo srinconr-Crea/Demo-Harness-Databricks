@@ -20,4 +20,3 @@ La App SHALL mostrar explore, propose, update cuando aplique, apply, verify, syn
 #### Scenario: Recomendación o check pendiente
 - **WHEN** Haiku tiene hallazgos o los checks están pending o unavailable
 - **THEN** se distinguen de fallos obligatorios y de creación exitosa del PR
-

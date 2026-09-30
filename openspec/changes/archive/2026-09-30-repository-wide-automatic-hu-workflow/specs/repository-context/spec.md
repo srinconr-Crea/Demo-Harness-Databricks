@@ -20,4 +20,3 @@ El harness SHALL permitir inventario, búsqueda textual y lectura dentro del che
 #### Scenario: Presupuesto agotado
 - **WHEN** el contexto alcanza un límite configurado
 - **THEN** la respuesta indica el límite o truncamiento y no afirma haber inspeccionado contenido omitido
-

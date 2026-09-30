@@ -75,4 +75,3 @@ La revisión independiente con Haiku 4.5 SHALL ser asesora. Hallazgos, rechazo, 
 #### Scenario: Fallo obligatorio con Haiku favorable
 - **WHEN** Haiku aprueba pero fallan pruebas o Sonnet
 - **THEN** se bloquea publicación
-

@@ -27,4 +27,3 @@ El harness SHALL completar sync y archive y conservar un candidato exacto ligado
 #### Scenario: Candidato sin cambios posteriores
 - **WHEN** base y hashes coinciden con el candidato verificado y autorizado
 - **THEN** publica exactamente ese candidato sin aprobación humana adicional del diff
-

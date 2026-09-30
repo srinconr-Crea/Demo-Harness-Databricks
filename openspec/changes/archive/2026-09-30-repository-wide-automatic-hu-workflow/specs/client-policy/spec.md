@@ -29,4 +29,3 @@ Cada perfil general SHALL declarar operaciones, extensiones, límites de archivo
 #### Scenario: Perfil piloto existente
 - **WHEN** se carga un perfil silver_safe_ratio sin política de repositorio
 - **THEN** continúa su editor y prueba SQL acotados
-

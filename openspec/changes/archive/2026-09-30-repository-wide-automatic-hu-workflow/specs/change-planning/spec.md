@@ -16,4 +16,3 @@ La propuesta SHALL mostrar objetivo, comportamiento esperado, archivos y operaci
 #### Scenario: Código mostrado antes de apply
 - **WHEN** la propuesta incluye ejemplos o cambios de código previstos
 - **THEN** se identifican como previstos sin afirmar que son el diff ejecutado
-
