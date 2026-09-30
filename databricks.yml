@@ -125,6 +125,9 @@ sync:
   include:
     - src/agents/**
   exclude:
+    - .playwright-cli/**
+    - .ui-preview-data/**
+    - ui_preview_local.py
     - src/agents/**/__pycache__/**
     - src/agents/**/*.pyc
     - src/agents/**/.venv/**

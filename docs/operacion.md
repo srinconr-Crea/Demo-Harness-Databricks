@@ -30,6 +30,7 @@ databricks bundle validate --strict -t dev --profile CREA_DEV -o json > .databri
 src/agents/harness/.venv/Scripts/python.exe scripts/prepare_app_only_deployment.py .databricks/app-deploy-config.json
 databricks bundle sync -t dev --profile CREA_DEV
 databricks apps update demo-dbx-harness-mvp --profile CREA_DEV --json @.databricks/app-only-update.json
+databricks apps start demo-dbx-harness-mvp --profile CREA_DEV
 databricks apps deploy demo-dbx-harness-mvp --profile CREA_DEV --json @.databricks/app-only-deployment.json
 ```
 

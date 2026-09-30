@@ -18,6 +18,11 @@ node_modules/
 pytest-cache-files-*/
 .runs/
 .superpowers/
+.playwright-cli/
+.ui-preview-data/
+ui_preview_local.py
+.pytest_tmp/
+tests/tmp_pytest/
 # Exclude local distribution/packaging directories
 *.egg-info/
 build
