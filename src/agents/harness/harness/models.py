@@ -21,10 +21,12 @@ from .contracts import estimate_cost
 def load_model_config(path: str | Path) -> tuple[dict[str, str], dict[str, tuple[Decimal, Decimal]], str]:
     config = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     routing = config["routing"]
-    if set(routing) != {"planner", "developer", "verifier"}:
+    if not {"planner", "developer", "verifier"}.issubset(routing):
         raise ValueError("La configuración de modelos requiere los tres roles")
     if routing["planner"] != "databricks-claude-sonnet-5":
         raise ValueError("El rol planner requiere databricks-claude-sonnet-5")
+    if any(routing.get(role, "databricks-claude-sonnet-5") != "databricks-claude-sonnet-5" for role in ("explorer", "openspec_verifier")):
+        raise ValueError("Los flujos OpenSpec requieren databricks-claude-sonnet-5")
     prices = {
         endpoint: (Decimal(str(rates["input_usd_per_token"])), Decimal(str(rates["output_usd_per_token"])))
         for endpoint, rates in config["pricing"]["endpoints"].items()
@@ -60,6 +62,9 @@ class ModelResponse:
     duration_ms: int | None = None
     databricks_request_id: str | None = None
     error: str | None = None
+    stage: str | None = None
+    revision: int | None = None
+    approved_sha256: str | None = None
 
 
 _PRIVATE_KEY = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.DOTALL)
@@ -93,7 +98,7 @@ class ModelClient:
         self.system_prompt = system_prompt
         self.max_tokens = max_tokens
 
-    def complete(self, role: str, prompt: str, *, call_id: str | None = None, usage_context: dict[str, str] | None = None, max_tokens: int | None = None, system_prompt: str | None = None) -> ModelResponse:
+    def complete(self, role: str, prompt: str, *, call_id: str | None = None, usage_context: dict[str, str] | None = None, max_tokens: int | None = None, system_prompt: str | None = None, stage: str | None = None, revision: int | None = None, approved_sha256: str | None = None) -> ModelResponse:
         model = self.routing[role]
         call_id = call_id or uuid.uuid4().hex
         body = {
@@ -115,6 +120,9 @@ class ModelClient:
             "input_text": _safe_log_text(input_raw, self.log_text_limit),
             "input_sha256": hashlib.sha256(input_raw.encode("utf-8")).hexdigest(),
             "started_at": started_at,
+            "stage": stage,
+            "revision": revision,
+            "approved_sha256": approved_sha256,
         }
         try:
             result = self.api.do("POST", f"/serving-endpoints/{model}/invocations", body=body)

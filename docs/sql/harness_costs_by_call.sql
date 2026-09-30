@@ -3,7 +3,7 @@
 WITH runs AS (
   SELECT * FROM read_files(:runs_path, format => 'json', multiLine => true)
 ), attempts AS (
-  SELECT r.run_id, r.story_id, r.story.title AS story_title, r.client_profile,
+  SELECT r.run_id, r.story_id, r.story_id AS story_title, r.client_profile,
          r.repository, a.attempt_id, a.state AS attempt_state,
          a.changed_files, a.result, a.publication, a.queued_at, a.started_at, a.finished_at
   FROM runs r

@@ -3,10 +3,12 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+import harness.contracts as contracts
 from harness.contracts import (
     AgentCallContract,
     ClientProfile,
     RunAttempt,
+    RunContract,
     Story,
     estimate_cost,
     load_client_profile,
@@ -25,6 +27,34 @@ def valid_story():
         "nonfunctional": "No modificar jobs ni datos actuales",
         "validation": "Probar costo positivo, cero y nulo",
     }
+
+
+def test_two_field_story_request_rejects_blank_input():
+    assert contracts.StoryRequest(hu=" HU-42 ", description=" Añadir un reporte ").hu == "HU-42"
+    with pytest.raises(ValueError):
+        contracts.StoryRequest(hu=" ", description="Añadir un reporte")
+    with pytest.raises(ValueError):
+        contracts.StoryRequest(hu="HU-42", description=" ")
+
+
+def test_new_attempt_tracks_review_stage_and_legacy_run_remains_readable():
+    approval = contracts.RunApproval(kind="plan", revision=2, sha256="a" * 64, actor="ana@example.com")
+    event = contracts.RunEvent(seq=1, stage="awaiting_plan_review", kind="approval", revision=2)
+    attempt = RunAttempt(
+        attempt_id="attempt-one", state="awaiting_plan_review", stage="awaiting_plan_review",
+        revision=2, base_sha="b" * 40, checkpoint_id="checkpoint-one",
+        approvals=[approval], timeline=[event],
+    )
+    assert attempt.approvals[0].sha256 == "a" * 64
+    assert attempt.timeline[0].seq == 1
+    legacy = RunContract.model_validate({
+        "schema_version": 3, "run_id": "legacy-run", "story_id": "NP-001",
+        "story": valid_story(), "state": "complete", "attempts": [],
+    })
+    assert legacy.schema_version == 3
+    assert isinstance(legacy.story, Story)
+    with pytest.raises(ValueError):
+        contracts.RunApproval(kind="diff", revision=1, sha256="short", actor="ana@example.com")
 
 
 def test_story_requires_all_five_manual_sections():
@@ -124,6 +154,24 @@ def test_agent_call_contract_exposes_input_output_and_request_join():
     )
     assert call.client_request_id == call.call_id
     assert call.input_text and call.output_text and call.parsed_output["valid"]
+
+
+def test_agent_call_joins_stage_revision_and_approved_hash_without_fabricated_cost():
+    call = AgentCallContract(
+        call_id="call-2", run_id="run-1", attempt_id="attempt-1", story_id="HU-1",
+        role="developer", model="databricks-claude-sonnet-5", pricing_source="configured",
+        stage="applying", revision=3, approved_sha256="a" * 64,
+    )
+    assert call.estimated_cost_usd is None
+    assert (call.run_id, call.attempt_id, call.stage, call.revision, call.approved_sha256) == (
+        "run-1", "attempt-1", "applying", 3, "a" * 64,
+    )
+    historical = AgentCallContract.model_validate({
+        "schema_version": 2, "call_id": "old", "run_id": "run-1",
+        "attempt_id": "attempt-1", "story_id": "HU-1", "role": "planner",
+        "model": "databricks-claude-sonnet-5", "pricing_source": "configured",
+    })
+    assert historical.stage is None and historical.approved_sha256 is None
 
 
 def test_agent_output_schema_rejects_wrong_role_fields():

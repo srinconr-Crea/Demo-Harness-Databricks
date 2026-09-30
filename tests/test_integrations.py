@@ -47,6 +47,22 @@ def test_model_call_sink_receives_role_response_usage_and_cost():
     assert saved[0][1].cost_usd == Decimal("0.8")
 
 
+def test_model_call_preserves_stage_revision_and_approval_on_failure():
+    class FailingAPI:
+        def do(self, *_args, **_kwargs):
+            raise RuntimeError("unavailable")
+
+    saved = []
+    client = ModelClient(FailingAPI(), {"developer": "databricks-claude-sonnet-5"}, {},
+                         on_call=lambda _role, call: saved.append(call))
+    with pytest.raises(RuntimeError):
+        client.complete("developer", "apply", stage="applying", revision=3,
+                        approved_sha256="b" * 64)
+    assert saved[0].stage == "applying" and saved[0].revision == 3
+    assert saved[0].approved_sha256 == "b" * 64
+    assert saved[0].cost_usd is None
+
+
 def test_four_planner_calls_use_sonnet_and_each_reaches_json_sink():
     saved = []
     api = FakeWorkspaceAPI({"choices": [{"message": {"content": '{"content":"valid artifact"}'}}], "usage": {"prompt_tokens": 2, "completion_tokens": 3}})
@@ -118,6 +134,13 @@ def test_planner_model_is_fixed_to_sonnet_five(tmp_path):
         load_model_config(path)
 
 
+def test_all_openspec_roles_route_to_sonnet_five(tmp_path):
+    path = tmp_path / "models.yaml"
+    path.write_text("routing:\n  planner: databricks-claude-sonnet-5\n  developer: databricks-claude-sonnet-5\n  verifier: databricks-claude-haiku-4-5\n  explorer: wrong-model\n  openspec_verifier: databricks-claude-sonnet-5\npricing:\n  source: estimated\n  endpoints:\n    databricks-claude-sonnet-5: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n    databricks-claude-haiku-4-5: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n    wrong-model: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="OpenSpec"):
+        load_model_config(path)
+
+
 def test_runtime_logging_limits_are_loaded_from_yaml(tmp_path):
     path = tmp_path / "runtime.yaml"
     path.write_text("logging:\n  max_text_chars: 1200\n", encoding="utf-8")
@@ -176,7 +199,7 @@ def test_existing_pr_only_reused_when_content_matches():
             return "unexpected content", "sha"
 
     client = ExistingPR(1, 2, "unused", repository="srinconr-Crea/Naturapet_DLH", base_branch="develop")
-    with pytest.raises(ValueError, match="PR existente"):
+    with pytest.raises(ValueError, match="rama feature contiene cambios distintos"):
         client.create_feature_pr(
             "srinconr-Crea/Naturapet_DLH", "feature/np-001", "develop", "title", "body", "base-sha",
             {"notebooks/comercial/silver/test.ipynb": ("validated content", "source-sha")},
@@ -235,6 +258,48 @@ def test_github_publishes_code_and_openspec_in_one_commit():
     assert url.endswith("/1")
     assert not any(method == "PUT" for method, _path, _body in calls)
     assert len([call for call in calls if call[1].endswith("/git/commits") and call[0] == "POST"]) == 1
+
+
+def test_github_publishes_a_deletion_and_reuses_only_matching_pr():
+    calls = []
+
+    class DeletedClient(GitHubAppClient):
+        def _request(self, method, path, **kwargs):
+            calls.append((method, path, kwargs.get("json")))
+            if method == "GET" and path.endswith("/pulls"):
+                return []
+            if method == "GET" and "/git/ref/heads/" in path:
+                response = __import__("httpx").Response(404, request=__import__("httpx").Request("GET", "https://api.github.com" + path))
+                raise __import__("httpx").HTTPStatusError("missing", request=response.request, response=response)
+            if path.endswith("/git/commits/base-sha"):
+                return {"tree": {"sha": "base-tree"}}
+            if path.endswith("/git/trees"):
+                assert kwargs["json"]["tree"] == [{"path": "src/old.py", "mode": "100644", "type": "blob", "sha": None}]
+                return {"sha": "new-tree"}
+            if path.endswith("/git/commits"):
+                return {"sha": "new-commit"}
+            if path.endswith("/git/refs"):
+                return {}
+            if method == "POST" and path.endswith("/pulls"):
+                return {"html_url": "https://github.com/o/r/pull/1"}
+            raise AssertionError((method, path))
+
+    client = DeletedClient(1, 2, "unused", repository="o/r", base_branch="develop")
+    client.create_feature_pr("o/r", "feature/delete", "develop", "delete", "body", "base-sha", {"src/old.py": (None, None)})
+    assert not any(path.endswith("/git/blobs") for _method, path, _body in calls)
+
+    class ReusedDeletion(GitHubAppClient):
+        def _request(self, method, path, **_kwargs):
+            if path.endswith("/pulls"):
+                return [{"html_url": "https://github.com/o/r/pull/1"}]
+            return {"merge_base_commit": {"sha": "base-sha"},
+                    "files": [{"filename": "src/old.py", "status": "removed"}]}
+
+        def read_file(self, path, *, ref):
+            raise AssertionError("A deleted file must not be read")
+
+    reused = ReusedDeletion(1, 2, "unused", repository="o/r", base_branch="develop")
+    assert reused.create_feature_pr("o/r", "feature/delete", "develop", "delete", "body", "base-sha", {"src/old.py": (None, None)}).endswith("/1")
 
 
 @pytest.mark.parametrize(("runs", "expected"), [

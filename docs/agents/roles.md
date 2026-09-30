@@ -1,13 +1,15 @@
-# Roles dentro de la App
+# Roles de la conversación OpenSpec
 
-Los tres roles son llamadas a Foundation Model API desde la misma App FastAPI, no Apps ni identidades independientes. Sus instrucciones y límites de texto están en `config/defaults/agents.yaml`; el enrutamiento de modelos está en `config/defaults/models.yaml`.
+La App FastAPI coordina las llamadas mediante Databricks Foundation Model API. Los roles comparten la identidad de la App; el Job de pruebas usa una identidad de servicio separada. El enrutamiento está en `src/agents/harness/config/defaults/models.yaml` y los límites de texto en `src/agents/harness/config/defaults/agents.yaml`.
 
-| Rol | Entrada | Salida validada | Autoridad |
-| --- | --- | --- | --- |
-| Planner OpenSpec | HU, contexto del cliente, estrategia, expresión y fuente | `content`, `strategy`, `code_path`, `expression` por artefacto | Usa Sonnet 5 para propuesta, spec, diseño y tareas; no edita código |
-| Desarrollador | HU, plan OpenSpec validado, expresión calculada por reglas y código fuente | `expression`, `notes` | Propone; el editor determinista escribe |
-| Verificador | HU, plan OpenSpec, diff y resultado de sandbox | `approved`, `notes`, `findings` | Puede rechazar la publicación |
+| Rol | Momento | Responsabilidad |
+| --- | --- | --- |
+| Explorador | `explore` | Resume la HU y pide aclaraciones cuando faltan datos. Usa Sonnet 5. |
+| Planner | `propose` / `update` | Escribe proposal, specs, design y tasks siguiendo las instrucciones del esquema OpenSpec del cliente. Usa Sonnet 5. |
+| Desarrollador | `apply` | Propone operaciones de archivo tipadas o confirma la expresión de `silver_safe_ratio`. Solo el aplicador de la App escribe dentro de la política del perfil. |
+| Verificador OpenSpec | `verify` | Confronta specs, tareas, diff y evidencia de pruebas. Usa Sonnet 5. |
+| Verificador independiente | `verify` | Revisa el resultado con el modelo de revisión configurado, actualmente Haiku 4.5. |
 
-El orquestador inicializa OpenSpec en un workspace temporal del repositorio cliente antes de llamar al desarrollador. Valida JSON con Pydantic, ejecuta `openspec validate --strict` y comprueba por código la estrategia, la expresión, el archivo y la prueba de sandbox. Tras la aprobación del verificador, archiva el cambio y publica notebook y archivos OpenSpec en un mismo commit de la rama `feature/*`. La identidad de servicio de la App opera recursos configurados; la acción opcional de detenerla usa el token del usuario con permiso `CAN MANAGE`.
+OpenSpec se prepara una sola vez por cliente en un PR separado. Cada HU clona el repositorio preparado, espera aprobación del plan, aplica código, ejecuta las pruebas configuradas y solicita aprobación del diff final antes de crear un PR. El PR y su merge se revisan en GitHub por una persona. La HU y la salida de modelos son datos no confiables y no amplían rutas, modelos, permisos ni validadores.
 
-Las cuatro llamadas del planner a `databricks-claude-sonnet-5` guardan `run_id`, `attempt_id`, `call_id`, entrada, salida, tiempos, tokens y costo estimado en los mismos JSON del volumen UC que los demás roles. Los registros históricos con rol `analyst` siguen legibles. Los artefactos redactados se guardan por intento bajo `runs/openspec/`. Ningún rol puede ampliar políticas a partir de texto de la HU o del repositorio.
+Cada invocación guarda `run_id`, `attempt_id`, `call_id`, rol, etapa, revisión, modelo, tiempos, tokens, estado y costo estimado si hubo `usage`. Un fallo o una respuesta sin `usage` conserva el costo ausente. Los JSON históricos siguen legibles.

@@ -7,18 +7,17 @@ Harness de desarrollo separado de los repositorios cliente. Parte del scaffold d
 abrir un pull request hacia la rama base del perfil. El merge y el despliegue del código del
 cliente requieren revisión humana.
 
-## Estado del desarrollo
+## Flujo de una HU
 
-- Una Databricks App con un formulario para ID, título y cinco bloques: arquitectura, origen/destino, reglas de negocio, requisitos no funcionales y reglas de validación. La interfaz permite solicitar cancelación mientras la HU está activa y solicitar la parada de la App tras un estado final.
-- Orquestador determinista con planner OpenSpec y desarrollador en `databricks-claude-sonnet-5`, y verificador en `databricks-claude-haiku-4-5`. Inicializa OpenSpec en el repositorio cliente antes de desarrollar, valida el plan y registra las cuatro llamadas del planner con sus tokens y costos estimados.
-- Integración GitHub App limitada a `srinconr-Crea/Naturapet_DLH`, base `develop`, cambios en rutas permitidas y PR sin merge.
-- Perfil NaturaPet en YAML. La estrategia validada añade una razón `columna = numerador / denominador` con `safe_divide` en el notebook Silver comercial autorizado; la medida concreta viene de cada HU.
-- Prueba remota con datos sintéticos en un SQL warehouse nuevo y aislado. Comprueba el cálculo para costo positivo, cero y NULL; **no ejecuta el notebook PySpark completo**.
-- Contratos versionados de HU, intento, artefactos OpenSpec y llamada por agente en el volumen Unity Catalog del harness. `run_id`, `attempt_id` y `call_id` vinculan entradas, salidas, eventos, archivos, tiempos, tokens y costos estimados. Sin tope monetario inicial.
+La App recibe **HU** y **descripción**. Una operación de incorporación separada clona el repositorio cliente, inicializa OpenSpec una sola vez y abre un PR de preparación. Una persona debe integrar ese PR antes de enviar HUs. Cada HU posterior clona el SHA base completo en un workspace local temporal y verifica que OpenSpec ya esté versionado.
 
-La lógica de esta estrategia ya no depende de la medida `NP-001`, pero sigue acotada a razones seguras en un notebook con la estructura configurada. Otros tipos de cambio necesitan editor, validadores y pruebas propias antes de permitir push/PR.
+El explorador puede pedir aclaraciones. El planner genera proposal, specs, design y tasks; la App los muestra para aprobación o cambios. Tras aprobar el plan, el desarrollador aplica código dentro de la política del perfil. Las pruebas configuradas y dos verificadores revisan el resultado. OpenSpec se sincroniza y archiva antes de mostrar el diff final; una aprobación humana en la App permite abrir el PR. El merge y despliegue del cliente siguen siendo manuales.
 
-El piloto `NP-001` produjo [NaturaPet PR #6](https://github.com/srinconr-Crea/Naturapet_DLH/pull/6). La segunda prueba `NP-002` produjo [NaturaPet PR #7](https://github.com/srinconr-Crea/Naturapet_DLH/pull/7) y tres registros de llamadas a modelos, consultables por HU y agente. La [evidencia del primer piloto](docs/pilot/validacion.md) y la [guía de operación](docs/operacion.md) explican costos estimados y límites de validación. El [plan de implementación](docs/superpowers/plans/2026-09-28-productizacion-harness.md) registra el diseño y las comprobaciones pendientes de despliegue. Los cambios de esta iteración están en el repositorio del harness; la App desplegada no se actualiza hasta ejecutar el bundle.
+Los flujos OpenSpec usan `databricks-claude-sonnet-5`; el desarrollador opera en `apply` y el verificador independiente usa el modelo configurado. `silver_safe_ratio` conserva su editor y prueba SQL sintética. Un perfil puede habilitar `general_patch` con rutas, extensiones, operaciones y validadores acotados. El código general se ejecuta en un Job de Databricks dedicado con otra identidad y sin secretos de la App.
+
+El volumen Unity Catalog conserva JSON de ejecuciones, eventos y llamadas por modelo, más checkpoints exactos y diffs de revisión con ACL restringidas. La tabla Delta del harness coordina revisiones y leases. El costo por llamada es estimado cuando el endpoint entrega `usage`.
+
+La App puede publicarse provisionalmente sin el Job dedicado; la [guía de operación](docs/operacion.md) incluye ese procedimiento. La identidad del Job, las pruebas completas de interfaz y la preparación del cliente permanecen pendientes.
 
 ## Estructura
 
@@ -48,7 +47,7 @@ databricks bundle deploy -t dev --profile CREA_DEV
 databricks bundle run harness -t dev --profile CREA_DEV
 ```
 
-La App se llama `demo-dbx-harness-mvp`. Para encenderla y abrirla desde Windows,
+La App desplegada actualmente se llama `demo-dbx-harness-mvp`. Para encenderla y abrirla desde Windows,
 ejecuta [`iniciar-harness.bat`](iniciar-harness.bat). Después de las pruebas del
 piloto se deja detenida. Consulta [`docs/operacion.md`](docs/operacion.md) para
 credenciales, incorporación de clientes, costos y límites conocidos.

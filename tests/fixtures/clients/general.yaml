@@ -1,0 +1,26 @@
+name: general-example
+version: "1"
+repository: example/client
+base_branch: develop
+allowed_paths:
+  - src/
+openspec_root: openspec
+general_patch:
+  allowed_paths:
+    - src/
+  extensions:
+    - .py
+    - .md
+    - .json
+  operations:
+    - create
+    - modify
+    - delete
+  max_files: 10
+  max_bytes: 100000
+  test_adapters:
+    - python_compile
+    - markdown_structure
+    - pytest_sandbox
+  test_paths:
+    - tests/test_value.py

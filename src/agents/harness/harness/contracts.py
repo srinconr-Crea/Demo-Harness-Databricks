@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, StrictBool, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, field_validator, model_validator
 
 
 class Story(BaseModel):
@@ -29,6 +29,49 @@ class Story(BaseModel):
         if not value:
             raise ValueError("El campo no puede estar vacío")
         return value
+
+
+class StoryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    hu: str = Field(min_length=1, max_length=4000)
+    description: str = Field(min_length=1, max_length=20000)
+
+    @field_validator("hu", "description")
+    @classmethod
+    def nonblank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("El campo no puede estar vacío")
+        return value
+
+
+RunStage = Literal[
+    "exploring", "awaiting_clarification", "proposing", "awaiting_plan_review",
+    "updating", "applying", "verifying", "preparing_final_diff",
+    "awaiting_diff_review", "publishing", "complete", "failed", "cancelled",
+]
+RunState = Literal[
+    "queued", "running", "awaiting_clarification", "awaiting_plan_review",
+    "awaiting_diff_review", "complete", "failed", "cancelled", "interrupted",
+]
+
+
+class RunApproval(BaseModel):
+    kind: Literal["plan", "diff"]
+    revision: int = Field(ge=1)
+    sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    actor: str = Field(min_length=1)
+    at: datetime | None = None
+
+
+class RunEvent(BaseModel):
+    seq: int = Field(ge=1)
+    stage: RunStage | None = None
+    kind: str = Field(min_length=1)
+    revision: int = Field(ge=0)
+    at: datetime | None = None
+    actor: str | None = None
+    details: dict = Field(default_factory=dict)
 
 
 class SafeRatioStrategy(BaseModel):
@@ -51,6 +94,43 @@ class SafeRatioStrategy(BaseModel):
         if any(re.fullmatch(r"[a-z][a-z0-9_]{1,63}", value) is None for value in values):
             raise ValueError("Columnas permitidas inválidas")
         return values
+
+
+class GeneralPatchPolicy(BaseModel):
+    allowed_paths: list[str] = Field(min_length=1)
+    extensions: list[str] = Field(min_length=1)
+    operations: list[Literal["create", "modify", "delete"]] = Field(min_length=1)
+    max_files: int = Field(ge=1, le=300)
+    max_bytes: int = Field(ge=1, le=10_000_000)
+    test_adapters: list[Literal["python_compile", "markdown_structure", "pytest_sandbox"]] = Field(min_length=1)
+    test_paths: list[str] = Field(default_factory=list)
+
+    @field_validator("allowed_paths")
+    @classmethod
+    def valid_paths(cls, values: list[str]) -> list[str]:
+        if any(not path or path.startswith(("/", ".")) or "\\" in path or ".." in PurePosixPath(path).parts for path in values):
+            raise ValueError("Prefijo de edición general inválido")
+        return values
+
+    @field_validator("extensions")
+    @classmethod
+    def valid_extensions(cls, values: list[str]) -> list[str]:
+        if any(re.fullmatch(r"\.[a-z0-9]{1,10}", value) is None for value in values):
+            raise ValueError("Extensión de edición general inválida")
+        return values
+
+    @field_validator("test_paths")
+    @classmethod
+    def valid_test_paths(cls, values: list[str]) -> list[str]:
+        if any(not path or path.startswith(("/", ".")) or "\\" in path or ".." in PurePosixPath(path).parts for path in values):
+            raise ValueError("Objetivo de pruebas fuera de política")
+        return values
+
+    @model_validator(mode="after")
+    def job_requires_targets(self):
+        if "pytest_sandbox" in self.test_adapters and not self.test_paths:
+            raise ValueError("El Job sandbox requiere objetivos de prueba configurados")
+        return self
 
 
 class RatioSpec(BaseModel):
@@ -88,7 +168,15 @@ class OpenSpecAttempt(BaseModel):
 
 class RunAttempt(BaseModel):
     attempt_id: str
-    state: Literal["queued", "running", "complete", "failed", "cancelled", "interrupted"]
+    state: RunState
+    stage: RunStage | None = None
+    revision: int = Field(default=0, ge=0)
+    base_sha: str | None = Field(default=None, pattern=r"^[a-f0-9]{40}$")
+    checkpoint_id: str | None = None
+    approvals: list[RunApproval] = Field(default_factory=list)
+    timeline: list[RunEvent] = Field(default_factory=list)
+    messages: list[dict] = Field(default_factory=list)
+    context: dict = Field(default_factory=dict)
     queued_at: datetime | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -103,14 +191,14 @@ class RunAttempt(BaseModel):
 
 
 class RunContract(BaseModel):
-    schema_version: int = 3
+    schema_version: int = 4
     run_id: str
     story_id: str
-    story: Story | None = None
+    story: Story | StoryRequest | None = None
     client_profile: str | None = None
     client_profile_version: str | None = None
     repository: str | None = None
-    state: Literal["queued", "running", "complete", "failed", "cancelled", "interrupted"]
+    state: RunState
     attempt_id: str | None = None
     instance_id: str | None = None
     attempts: list[RunAttempt] = Field(default_factory=list)
@@ -125,12 +213,15 @@ class RunContract(BaseModel):
 
 
 class AgentCallContract(BaseModel):
-    schema_version: int = 2
+    schema_version: int = 3
     call_id: str
     run_id: str
     attempt_id: str
     story_id: str
     role: str
+    stage: RunStage | None = None
+    revision: int | None = Field(default=None, ge=0)
+    approved_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     model: str
     status: Literal["complete", "failed"] = "complete"
     input_text: str | None = None
@@ -202,9 +293,20 @@ class ClientProfile(BaseModel):
     allowed_paths: list[str]
     openspec_root: Literal["openspec"]
     strategy: SafeRatioStrategy | None = None
+    general_patch: GeneralPatchPolicy | None = None
     github_app_id: int | None = None
     github_installation_id: int | None = None
+    reviewers: list[str] = Field(default_factory=list)
     ui: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def general_paths_within_profile(self):
+        if self.general_patch and any(
+            not any(path.rstrip("/") == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/") for prefix in self.allowed_paths)
+            for path in self.general_patch.allowed_paths
+        ):
+            raise ValueError("Las rutas de edición general exceden el perfil cliente")
+        return self
 
     def allows(self, path: str) -> bool:
         pure = PurePosixPath(path)

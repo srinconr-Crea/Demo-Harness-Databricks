@@ -24,6 +24,9 @@ variables:
     description: Scope containing the GitHub App private key
   github_secret_key:
     description: Key containing the GitHub App private key
+  sandbox_service_principal:
+    description: Dedicated service principal application ID for the client-code test Job
+    default: SET_DEDICATED_SANDBOX_SERVICE_PRINCIPAL
 
 
 include:
@@ -31,6 +34,7 @@ include:
   - ./resources/experiment.yml
   - ./resources/schemas.yml
   - ./resources/volumes.yml
+  - ./resources/sandbox_job.yml
 
 
 
@@ -57,6 +61,12 @@ resources:
             value_from: github-private-key
           - name: HARNESS_WAREHOUSE_ID
             value_from: sandbox-warehouse
+          - name: HARNESS_RUN_STATE_TABLE
+            value_from: run-state-table
+          - name: HARNESS_SANDBOX_JOB_ID
+            value_from: sandbox-job
+          - name: HARNESS_SANDBOX_DIR
+            value: /Volumes/${resources.volumes.sandbox.catalog_name}/${resources.volumes.sandbox.schema_name}/${resources.volumes.sandbox.name}
       resources:
         - name: github-private-key
           secret:
@@ -85,6 +95,30 @@ resources:
             securable_type: VOLUME
             securable_full_name: ${resources.volumes.artifacts.catalog_name}.${resources.volumes.artifacts.schema_name}.${resources.volumes.artifacts.name}
             permission: WRITE_VOLUME
+        - name: run-state-table
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${resources.schemas.project_schema.catalog_name}.${resources.schemas.project_schema.name}.demo_harness_run_state
+            permission: MODIFY
+        - name: run-state-table-read
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: ${resources.schemas.project_schema.catalog_name}.${resources.schemas.project_schema.name}.demo_harness_run_state
+            permission: SELECT
+        - name: sandbox-job
+          job:
+            id: ${resources.jobs.demo_harness_sandbox.id}
+            permission: CAN_MANAGE_RUN
+        - name: sandbox-volume-write
+          uc_securable:
+            securable_type: VOLUME
+            securable_full_name: ${resources.volumes.sandbox.catalog_name}.${resources.volumes.sandbox.schema_name}.${resources.volumes.sandbox.name}
+            permission: WRITE_VOLUME
+        - name: sandbox-volume-read
+          uc_securable:
+            securable_type: VOLUME
+            securable_full_name: ${resources.volumes.sandbox.catalog_name}.${resources.volumes.sandbox.schema_name}.${resources.volumes.sandbox.name}
+            permission: READ_VOLUME
 
 
 sync:

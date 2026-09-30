@@ -1,94 +1,115 @@
-"""FastAPI entry point for the single manual HU interface."""
+"""FastAPI entry point for the resumable OpenSpec conversation."""
 
 from __future__ import annotations
 
+import json
 import os
 import sys
-from dataclasses import asdict
 from pathlib import Path
 
+import uvicorn
 import yaml
+from databricks.sdk import WorkspaceClient
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import uvicorn
-from databricks.sdk import WorkspaceClient
-from harness.contracts import (
-    AgentCallContract,
-    Story,
-    load_client_profile,
-    parse_agent_output,
-)
+from harness.contracts import AgentCallContract, RatioSpec, load_client_profile, parse_agent_output
+from harness.conversation import ConversationEngine
+from harness.conversation_webapp import create_conversation_app
+from harness.coordination import DeltaRunCoordinator, SqliteRunCoordinator
 from harness.github import GitHubAppClient
-from harness.models import (
-    ModelClient,
-    load_model_config,
-    load_runtime_config,
-    sanitize_log_value,
-)
-from harness.sandbox import verify_safe_ratio
+from harness.models import ModelClient, load_model_config, load_runtime_config, sanitize_log_value
+from harness.openspec import OpenSpecCLI
+from harness.sandbox import verify_general_patch, verify_safe_ratio
+from harness.sandbox_job import SandboxJobRunner
 from harness.store import LocalRunStore, VolumeRunStore
-from harness.webapp import create_app
-from harness.workflow import run_story
+
 
 PROFILE = load_client_profile(ROOT / "config" / "clients", os.environ["HARNESS_CLIENT_PROFILE"])
 ROUTING, PRICES, PRICING_SOURCE = load_model_config(ROOT / "config" / "defaults" / "models.yaml")
 RUNTIME = load_runtime_config(ROOT / "config" / "defaults" / "runtime.yaml")
 AGENT_CONFIG = yaml.safe_load((ROOT / "config" / "defaults" / "agents.yaml").read_text(encoding="utf-8"))
+WORKSPACE = WorkspaceClient()
 run_directory = os.environ.get("RUN_STORE_DIR")
-store = VolumeRunStore(WorkspaceClient().files, run_directory) if run_directory else LocalRunStore(ROOT / ".runs")
+STORE = VolumeRunStore(WORKSPACE.files, run_directory) if run_directory else LocalRunStore(ROOT / ".runs")
+table = os.environ.get("HARNESS_RUN_STATE_TABLE")
+COORDINATOR = (
+    DeltaRunCoordinator(WORKSPACE.api_client, os.environ["HARNESS_WAREHOUSE_ID"], table)
+    if table else SqliteRunCoordinator(ROOT / ".runs" / "state.db")
+)
+job_id = os.environ.get("HARNESS_SANDBOX_JOB_ID")
+SANDBOX_JOB = (
+    SandboxJobRunner(WORKSPACE.api_client, WORKSPACE.files, job_id=int(job_id),
+                     volume_dir=os.environ["HARNESS_SANDBOX_DIR"])
+    if job_id and os.environ.get("HARNESS_SANDBOX_DIR") else None
+)
 
 
-def execute_story(story: Story, run_id: str, attempt_id: str, control) -> dict:
+def github_factory():
     if PROFILE.github_app_id is None or PROFILE.github_installation_id is None:
         raise ValueError("El perfil no configura la GitHub App")
     private_key = os.environ["GITHUB_APP_PRIVATE_KEY"].replace("\\n", "\n")
-    github = GitHubAppClient(
-        PROFILE.github_app_id,
-        PROFILE.github_installation_id,
-        private_key,
-        repository=PROFILE.repository,
-        base_branch=PROFILE.base_branch,
+    return GitHubAppClient(
+        PROFILE.github_app_id, PROFILE.github_installation_id, private_key,
+        repository=PROFILE.repository, base_branch=PROFILE.base_branch,
     )
-    workspace = WorkspaceClient()
+
+
+def models_factory(run_id: str, attempt_id: str):
+    record = STORE.load(run_id)
+    story_id = record["story_id"]
 
     def save_call(role, response) -> None:
         try:
             parsed_output = parse_agent_output(role, response.text) if response.status == "complete" else None
         except ValueError:
-            parsed_output = None
-        record = AgentCallContract(
-            call_id=response.call_id, run_id=run_id, attempt_id=attempt_id, story_id=story.id,
-            role=role, model=response.model, status=response.status,
+            try:
+                parsed_output = json.loads(response.text) if response.status == "complete" else None
+            except json.JSONDecodeError:
+                parsed_output = None
+        contract = AgentCallContract(
+            call_id=response.call_id, run_id=run_id, attempt_id=attempt_id,
+            story_id=story_id, role=role, model=response.model, status=response.status,
+            stage=response.stage, revision=response.revision,
+            approved_sha256=response.approved_sha256,
             input_text=response.input_text, output_text=response.output_text,
             input_sha256=response.input_sha256, output_sha256=response.output_sha256,
-            parsed_output=sanitize_log_value(parsed_output, RUNTIME["logging"]["max_text_chars"]), client_request_id=response.call_id,
-            databricks_request_id=response.databricks_request_id,
+            parsed_output=sanitize_log_value(parsed_output, RUNTIME["logging"]["max_text_chars"]),
+            client_request_id=response.call_id, databricks_request_id=response.databricks_request_id,
             response=response.output_text, started_at=response.started_at,
-            completed_at=response.completed_at, duration_ms=response.duration_ms, error=response.error,
-            input_tokens=response.input_tokens,
+            completed_at=response.completed_at, duration_ms=response.duration_ms,
+            error=response.error, input_tokens=response.input_tokens,
             output_tokens=response.output_tokens, estimated_cost_usd=response.cost_usd,
             pricing_source=PRICING_SOURCE,
         )
-        store.save_agent_call(run_id, response.call_id, record.model_dump(mode="json"))
+        STORE.save_agent_call(run_id, response.call_id, contract.model_dump(mode="json"))
 
-    models = ModelClient(
-        workspace.api_client, ROUTING, PRICES, on_call=save_call,
+    return ModelClient(
+        WORKSPACE.api_client, ROUTING, PRICES, on_call=save_call,
         log_text_limit=RUNTIME["logging"]["max_text_chars"],
         system_prompt=AGENT_CONFIG["system_prompt"], max_tokens=AGENT_CONFIG["max_tokens"],
-        usage_context={"run_id": run_id, "attempt_id": attempt_id, "story_id": story.id, "client_profile": PROFILE.name},
+        usage_context={"run_id": run_id, "attempt_id": attempt_id,
+                       "story_id": story_id, "client_profile": PROFILE.name},
     )
-    report = run_story(story, PROFILE, github, models, lambda spec: verify_safe_ratio(workspace.api_client, os.environ["HARNESS_WAREHOUSE_ID"], spec), control=control, agent_config=AGENT_CONFIG, attempt_id=attempt_id)
-    return asdict(report)
 
 
-def stop_app_as_user(user_token: str) -> None:
-    host = WorkspaceClient().config.host
-    WorkspaceClient(host=host, token=user_token).apps.stop(name=os.environ["HARNESS_APP_NAME"])
+def run_tests(root, profile, paths, record, attempt):
+    if profile.general_patch:
+        return verify_general_patch(
+            root, profile, paths, SANDBOX_JOB,
+            run_id=record["run_id"], attempt_id=attempt["attempt_id"],
+            revision=attempt["revision"],
+        )
+    spec = RatioSpec.model_validate(attempt["context"]["ratio_spec"])
+    passed = verify_safe_ratio(WORKSPACE.api_client, os.environ["HARNESS_WAREHOUSE_ID"], spec)
+    return {"passed": passed, "evidence": ["Tres filas SQL sintéticas: positivo, cero y NULL"]}
 
 
-app = create_app(store, execute_story, PROFILE, stopper=stop_app_as_user, app_name=os.environ.get("HARNESS_APP_NAME"))
+ENGINE = ConversationEngine(
+    PROFILE, STORE, COORDINATOR, github_factory, models_factory, OpenSpecCLI(), run_tests,
+)
+app = create_conversation_app(ENGINE, PROFILE)
 
 
 if __name__ == "__main__":

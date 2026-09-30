@@ -6,3 +6,9 @@ resources:
       name: artifacts
       volume_type: MANAGED
       comment: "MLflow artifacts for ${bundle.name}"
+    sandbox:
+      catalog_name: ${resources.catalogs.harness_catalog.name}
+      schema_name: ${resources.schemas.project_schema.name}
+      name: demo_harness_sandbox
+      volume_type: MANAGED
+      comment: "Isolated input and test evidence for client code checks"

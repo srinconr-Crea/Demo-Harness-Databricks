@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import time
+import json
+from pathlib import Path
 from decimal import Decimal
+
+import yaml
 
 from .contracts import RatioSpec
 
@@ -42,3 +46,65 @@ def verify_safe_ratio(api, warehouse_id: str, spec: RatioSpec, *, timeout_second
     if Decimal(str(rows[0][1])) != Decimal(2) or rows[1][1] is not None or rows[2][1] is not None:
         raise ValueError("El cálculo Silver no satisface positivo/cero/NULL")
     return True
+
+
+def verify_general_patch(root: Path, profile, paths: list[str], job_runner,
+                         *, run_id: str, attempt_id: str, revision: int) -> dict:
+    """Static checks plus a separate-identity Job for executable client changes."""
+    policy = profile.general_patch
+    if policy is None or not paths:
+        raise ValueError("No hay una política de pruebas generales verificable")
+    evidence = []
+    executable = False
+    for relative in paths:
+        if not profile.allows(relative) or not any(relative.startswith(prefix.rstrip("/") + "/") for prefix in policy.allowed_paths):
+            raise ValueError("Ruta de prueba fuera del perfil")
+        path = root / relative
+        suffix = path.suffix.lower()
+        if not path.exists():
+            executable = True
+            evidence.append(f"Archivo eliminado: {relative}")
+            continue
+        if suffix == ".py":
+            if "python_compile" not in policy.test_adapters:
+                raise ValueError("Falta comprobación Python obligatoria")
+            compile(path.read_text(encoding="utf-8"), relative, "exec")
+            evidence.append(f"Sintaxis Python válida: {relative}")
+            executable = True
+        elif suffix == ".ipynb":
+            if "python_compile" not in policy.test_adapters:
+                raise ValueError("Falta comprobación de notebook obligatoria")
+            notebook = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(notebook.get("cells"), list):
+                raise ValueError("Notebook sin celdas válidas")
+            for cell in notebook["cells"]:
+                if cell.get("cell_type") == "code":
+                    source = cell.get("source", [])
+                    compile("".join(source) if isinstance(source, list) else source, relative, "exec")
+            evidence.append(f"Estructura y sintaxis de notebook válidas: {relative}")
+            executable = True
+        elif suffix == ".md":
+            if "markdown_structure" not in policy.test_adapters:
+                raise ValueError("Falta comprobación Markdown obligatoria")
+            content = path.read_text(encoding="utf-8")
+            if not any(line.startswith("# ") for line in content.splitlines()):
+                raise ValueError("Markdown sin título principal")
+            evidence.append(f"Estructura Markdown válida: {relative}")
+        elif suffix in {".yaml", ".yml", ".json"}:
+            content = path.read_text(encoding="utf-8")
+            json.loads(content) if suffix == ".json" else yaml.safe_load(content)
+            evidence.append(f"Estructura de datos válida: {relative}")
+            executable = True
+        else:
+            raise ValueError("El tipo de archivo no tiene un validador obligatorio")
+    if executable:
+        if "pytest_sandbox" not in policy.test_adapters or not policy.test_paths or job_runner is None:
+            raise ValueError("Los cambios de código requieren un Job sandbox dedicado")
+        result = job_runner.run(root, run_id=run_id, attempt_id=attempt_id,
+                                revision=revision, test_paths=policy.test_paths)
+        if result.get("passed") is not True:
+            return {"passed": False, "evidence": evidence + list(result.get("evidence") or []),
+                    "job_run_id": result.get("job_run_id")}
+        return {"passed": True, "evidence": evidence + list(result.get("evidence") or []),
+                "job_run_id": result.get("job_run_id")}
+    return {"passed": True, "evidence": evidence}

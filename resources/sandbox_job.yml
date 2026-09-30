@@ -1,0 +1,37 @@
+resources:
+  jobs:
+    demo_harness_sandbox:
+      name: demo_harness_sandbox
+      run_as:
+        service_principal_name: ${var.sandbox_service_principal}
+      max_concurrent_runs: 2
+      timeout_seconds: 900
+      parameters:
+        - name: input_path
+          default: ""
+        - name: result_path
+          default: ""
+        - name: archive_sha256
+          default: ""
+        - name: test_paths
+          default: "[]"
+      tasks:
+        - task_key: run_client_tests
+          spark_python_task:
+            python_file: ../src/agents/harness/app/sandbox_job_runner.py
+            parameters:
+              - --input-path
+              - "{{job.parameters.input_path}}"
+              - --result-path
+              - "{{job.parameters.result_path}}"
+              - --archive-sha256
+              - "{{job.parameters.archive_sha256}}"
+              - --test-paths
+              - "{{job.parameters.test_paths}}"
+          environment_key: sandbox
+      environments:
+        - environment_key: sandbox
+          spec:
+            environment_version: "2"
+            dependencies:
+              - pytest>=8,<9

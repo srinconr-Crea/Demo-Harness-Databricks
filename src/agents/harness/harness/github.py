@@ -10,6 +10,8 @@ from urllib.parse import quote
 import httpx
 import jwt
 
+from .checkout import GitCheckout
+
 
 class GitHubAppClient:
     def __init__(
@@ -80,6 +82,14 @@ class GitHubAppClient:
         data = self._request("GET", f"/repos/{self.repository}/git/ref/heads/{base_branch}")
         return data["object"]["sha"]
 
+    def checkout(self, destination, base_sha: str) -> None:
+        """Clone the configured repository at its exact approved base commit."""
+        from pathlib import Path
+
+        GitCheckout(f"https://github.com/{self.repository}.git", self.base_branch).clone(
+            Path(destination), base_sha, token=self._installation_token(),
+        )
+
     def pr_check_status(self, repository: str, branch: str) -> str:
         """Snapshot of checks after PR creation; absence or API denial is never a pass."""
         self._check_repo(repository)
@@ -129,7 +139,7 @@ class GitHubAppClient:
             raise ValueError("El contexto OpenSpec del cliente excede el límite")
         return result
 
-    def _verify_branch_diff(self, repository: str, branch: str, base_sha: str, files: dict[str, tuple[str, str | None]]) -> None:
+    def _verify_branch_diff(self, repository: str, branch: str, base_sha: str, files: dict[str, tuple[str | None, str | None]]) -> None:
         comparison = self._request("GET", f"/repos/{repository}/compare/{base_sha}...{quote(branch, safe='/')}")
         if comparison.get("merge_base_commit", {}).get("sha") != base_sha:
             raise ValueError("La rama feature no nació del commit base validado")
@@ -138,6 +148,18 @@ class GitHubAppClient:
         changed = {item.get("filename") for item in comparison.get("files", [])}
         if changed != set(files):
             raise ValueError("La rama feature contiene archivos adicionales o faltantes")
+        for item in comparison["files"]:
+            path = item["filename"]
+            expected_content = files[path][0]
+            if expected_content is None:
+                if item.get("status") != "removed":
+                    raise ValueError("La rama feature no borró el archivo aprobado")
+            else:
+                if item.get("status") == "removed":
+                    raise ValueError("La rama feature borró un archivo aprobado")
+                current_content, _ = self.read_file(path, ref=branch)
+                if current_content != expected_content:
+                    raise ValueError("La rama feature contiene cambios distintos a la HU validada")
 
     def create_feature_pr(
         self,
@@ -147,7 +169,7 @@ class GitHubAppClient:
         title: str,
         body: str,
         base_sha: str,
-        files: dict[str, tuple[str, str | None]],
+        files: dict[str, tuple[str | None, str | None]],
         *,
         on_progress: Callable[..., None] | None = None,
     ) -> str:
@@ -160,10 +182,6 @@ class GitHubAppClient:
         existing = self._request("GET", f"/repos/{repository}/pulls", params={"head": f"{owner}:{branch}", "base": base_branch, "state": "open"})
         if existing:
             self._verify_branch_diff(repository, branch, base_sha, files)
-            for path, (expected_content, _) in files.items():
-                current_content, _ = self.read_file(path, ref=branch)
-                if current_content != expected_content:
-                    raise ValueError("El PR existente contiene cambios distintos a la HU validada")
             url = existing[0]["html_url"]
             if on_progress:
                 on_progress("pr_created", pr_url=url, branch=branch, reused=True)
@@ -179,10 +197,6 @@ class GitHubAppClient:
             branch_exists = True
             if ref["object"]["sha"] != base_sha:
                 self._verify_branch_diff(repository, branch, base_sha, files)
-                for path, (expected_content, _) in files.items():
-                    current_content, _ = self.read_file(path, ref=branch)
-                    if current_content != expected_content:
-                        raise ValueError("La rama feature existente tiene cambios distintos")
                 pr = self._request("POST", f"/repos/{repository}/pulls", json={"title": title, "head": branch, "base": base_branch, "body": body, "draft": False})
                 if on_progress:
                     on_progress("pr_created", pr_url=pr["html_url"], branch=branch)
@@ -193,8 +207,11 @@ class GitHubAppClient:
             raise ValueError("El commit base no contiene un árbol Git válido")
         entries = []
         for path, (content, _source_sha) in sorted(files.items()):
-            blob = self._request("POST", f"/repos/{repository}/git/blobs", json={"content": content, "encoding": "utf-8"})
-            entries.append({"path": path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
+            if content is None:
+                entries.append({"path": path, "mode": "100644", "type": "blob", "sha": None})
+            else:
+                blob = self._request("POST", f"/repos/{repository}/git/blobs", json={"content": content, "encoding": "utf-8"})
+                entries.append({"path": path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
         tree = self._request("POST", f"/repos/{repository}/git/trees", json={"base_tree": base_tree, "tree": entries})
         commit = self._request("POST", f"/repos/{repository}/git/commits", json={"message": f"feat: {title}", "tree": tree["sha"], "parents": [base_sha]})
         if branch_exists:

@@ -5,3 +5,7 @@ env:
     valueFrom: github-private-key
   - name: HARNESS_WAREHOUSE_ID
     valueFrom: sandbox-warehouse
+  - name: HARNESS_RUN_STATE_TABLE
+    valueFrom: run-state-table
+  - name: HARNESS_SANDBOX_JOB_ID
+    valueFrom: sandbox-job
