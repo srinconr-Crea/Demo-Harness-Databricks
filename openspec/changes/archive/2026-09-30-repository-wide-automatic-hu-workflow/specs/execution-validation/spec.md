@@ -1,10 +1,6 @@
-# Execution Validation Specification
+# Spec Delta
 
-## Purpose
-
-Establecer los controles que deben pasar antes de publicar un cambio de código cliente.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Secuencia de controles
 El harness SHALL exigir checkout autorizado, OpenSpec preexistente, plan validado y aprobado por una persona, desarrollo registrado, pruebas pertinentes y verificación Sonnet contra los specs. La aprobación vigente del plan SHALL autorizar publicación automática después de sync y archive, sin aprobación humana adicional del diff. Desarrollador y verificador SHALL usar la misma revisión aprobada; apply SHALL ejecutar tareas aprobadas.
@@ -29,26 +25,6 @@ El harness SHALL exigir checkout autorizado, OpenSpec preexistente, plan validad
 - **WHEN** el código supera controles de estrategia
 - **THEN** Sonnet contrasta diff y pruebas con los specs de la revisión aprobada
 
-### Requirement: Sandbox sintético aislado
-
-La validación remota de `silver_safe_ratio` SHALL comprobar tres filas sintéticas en el SQL warehouse configurado: denominador positivo, cero y NULL.
-
-#### Scenario: Resultados esperados
-- **WHEN** la expresión devuelve el cociente para un denominador positivo y NULL para cero o NULL
-- **THEN** la prueba remota aprueba
-
-#### Scenario: Resultado incompleto o erróneo
-- **WHEN** faltan filas, la consulta falla o el resultado no coincide
-- **THEN** la prueba remota rechaza el cambio
-
-### Requirement: Alcance explícito de la prueba
-
-El reporte de validación SHALL distinguir la prueba SQL sintética de una ejecución completa del notebook del cliente.
-
-#### Scenario: Resumen previo al PR
-- **WHEN** el harness prepara el resumen de publicación
-- **THEN** informa que la prueba SQL no ejecutó el notebook completo
-
 ### Requirement: Verificación específica y ciclo de corrección
 Cada tipo e impacto de cambio SHALL disponer de controles deterministas y pruebas funcionales pertinentes configurados por el operador, además de verificación OpenSpec obligatoria. SHALL seleccionar adaptadores sobre archivos creados, modificados o eliminados y sus componentes afectados. Un descuadre obligatorio SHALL conservarse y permitir corrección trazable con nueva revisión y aprobación del plan, sin aprobar resultados inconclusos ni comandos de la HU.
 
@@ -67,6 +43,8 @@ Cada tipo e impacto de cambio SHALL disponer de controles deterministas y prueba
 #### Scenario: Eliminación
 - **WHEN** se elimina un archivo de un componente
 - **THEN** se ejecutan las pruebas configuradas de ese componente y se comprueban referencias pertinentes
+
+## ADDED Requirements
 
 ### Requirement: Adaptadores pertinentes y aislados
 El harness SHALL soportar python_compile, pytest_sandbox, sql_lint, yaml_validate, json_validate, notebook_validate, databricks_bundle_validate, toml_validate, markdown_structure y validación básica de texto. SHALL validar SQL con dialecto Databricks, notebooks según lenguaje y magias, y datos contra esquemas cuando se configuren. Código cliente y herramientas capaces de ejecutar su configuración SHALL operar en el Job con identidad separada, comandos confiables, límites y sin secretos de la App. Validar un bundle no SHALL desplegarlo. Pruebas remotas SHALL usar exclusivamente recursos demo_harness_* y el warehouse sintético autorizado.
@@ -97,3 +75,4 @@ La revisión independiente con Haiku 4.5 SHALL ser asesora. Hallazgos, rechazo, 
 #### Scenario: Fallo obligatorio con Haiku favorable
 - **WHEN** Haiku aprueba pero fallan pruebas o Sonnet
 - **THEN** se bloquea publicación
+

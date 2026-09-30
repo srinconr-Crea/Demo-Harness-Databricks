@@ -10,21 +10,31 @@ from pathlib import Path
 import uvicorn
 import yaml
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.core import ApiClient, Config
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from harness.contracts import AgentCallContract, RatioSpec, load_client_profile, parse_agent_output
+from harness.contracts import (
+    AgentCallContract,
+    RatioSpec,
+    load_client_profile,
+    parse_agent_output,
+)
 from harness.conversation import ConversationEngine
 from harness.conversation_webapp import create_conversation_app
 from harness.coordination import DeltaRunCoordinator, SqliteRunCoordinator
 from harness.github import GitHubAppClient
-from harness.models import ModelClient, load_model_config, load_runtime_config, sanitize_log_value
+from harness.models import (
+    ModelClient,
+    load_model_config,
+    load_runtime_config,
+    sanitize_log_value,
+)
 from harness.openspec import OpenSpecCLI
 from harness.sandbox import verify_general_patch, verify_safe_ratio
 from harness.sandbox_job import SandboxJobRunner
 from harness.store import LocalRunStore, VolumeRunStore
-
 
 PROFILE = load_client_profile(ROOT / "config" / "clients", os.environ["HARNESS_CLIENT_PROFILE"])
 ROUTING, PRICES, PRICING_SOURCE = load_model_config(ROOT / "config" / "defaults" / "models.yaml")
@@ -85,13 +95,18 @@ def models_factory(run_id: str, attempt_id: str):
         )
         STORE.save_agent_call(run_id, response.call_id, contract.model_dump(mode="json"))
 
-    return ModelClient(
+    client = ModelClient(
         WORKSPACE.api_client, ROUTING, PRICES, on_call=save_call,
         log_text_limit=RUNTIME["logging"]["max_text_chars"],
         system_prompt=AGENT_CONFIG["system_prompt"], max_tokens=AGENT_CONFIG["max_tokens"],
         usage_context={"run_id": run_id, "attempt_id": attempt_id,
                        "story_id": story_id, "client_profile": PROFILE.name},
     )
+    # A separate SDK transport bounds only advisory calls. Storage retains the main client.
+    config_values = WORKSPACE.config.as_dict()
+    config_values.update(http_timeout_seconds=20, retry_timeout_seconds=1)
+    client.advisory_api = ApiClient(Config(**config_values))
+    return client
 
 
 def run_tests(root, profile, paths, record, attempt):

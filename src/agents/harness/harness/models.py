@@ -86,6 +86,10 @@ def sanitize_log_value(value, limit: int):
     return value
 
 
+class ModelInvocationError(RuntimeError, ValueError):
+    """Only endpoint invocation failures; logging/storage failures propagate separately."""
+
+
 class ModelClient:
     def __init__(self, api, routing: dict[str, str], prices: dict[str, tuple[Decimal, Decimal]], on_call: Callable[[str, ModelResponse], None] | None = None, *, log_text_limit: int = 32000, usage_context: dict[str, str] | None = None, system_prompt: str | None = None, max_tokens: int = 2000):
         self.api = api
@@ -97,6 +101,7 @@ class ModelClient:
         self.usage_context = usage_context
         self.system_prompt = system_prompt
         self.max_tokens = max_tokens
+        self.advisory_api = None
 
     def complete(self, role: str, prompt: str, *, call_id: str | None = None, usage_context: dict[str, str] | None = None, max_tokens: int | None = None, system_prompt: str | None = None, stage: str | None = None, revision: int | None = None, approved_sha256: str | None = None) -> ModelResponse:
         model = self.routing[role]
@@ -125,16 +130,18 @@ class ModelClient:
             "approved_sha256": approved_sha256,
         }
         try:
-            result = self.api.do("POST", f"/serving-endpoints/{model}/invocations", body=body)
+            api = self.advisory_api if role == 'verifier' and self.advisory_api is not None else self.api
+            result = api.do("POST", f"/serving-endpoints/{model}/invocations", body=body)
         except Exception as error:
             response = ModelResponse(
                 "", model, None, None, None, status="failed", error=type(error).__name__,
                 completed_at=datetime.now(timezone.utc), duration_ms=int((time.monotonic() - started_clock) * 1000),
                 **common,
             )
+            self.calls.append(response)
             if self.on_call:
                 self.on_call(role, response)
-            raise
+            raise ModelInvocationError(_safe_log_text(str(error), 1000)) from error
         choices = result.get("choices") or []
         content = choices[0].get("message", {}).get("content") if choices else None
         if isinstance(content, str):
@@ -162,7 +169,7 @@ class ModelClient:
             self.calls.append(failed)
             if self.on_call:
                 self.on_call(role, failed)
-            raise ValueError(f"Respuesta vacía del modelo {model}")
+            raise ModelInvocationError(f"Respuesta vacía del modelo {model}")
         response = ModelResponse(
             answer, model, input_tokens, output_tokens, cost,
             output_text=_safe_log_text(answer, self.log_text_limit),

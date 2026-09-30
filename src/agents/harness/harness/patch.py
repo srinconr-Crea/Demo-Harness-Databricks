@@ -36,8 +36,7 @@ def _target(root: Path, profile: ClientProfile, path: str) -> Path:
         or any(part in {"", ".", ".."} for part in path.split("/"))
         or path.startswith((".github/", ".git/", "openspec/"))
         or pure.suffix not in policy.extensions
-        or not profile.allows(path)
-        or not any(path.startswith(prefix.rstrip("/") + "/") for prefix in policy.allowed_paths)
+        or not profile.allows_code(path)
     ):
         raise ValueError("Ruta de edición fuera de la política del perfil")
     target = root.joinpath(*path.split("/"))

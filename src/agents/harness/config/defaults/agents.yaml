@@ -7,11 +7,15 @@ limits:
 tasks:
   planner: >-
     Redacta los artefactos OpenSpec de la HU conforme a las instrucciones de cada artefacto.
-    Devuelve content, strategy, code_path y expression. El manifiesto debe coincidir
-    exactamente con el perfil y la expresión determinista proporcionados.
+    En el flujo conversacional devuelve content y, para la propuesta general, summary
+    en español y manifest con rutas y operaciones previstas. Respeta el contrato
+    específico de estrategia proporcionado y los permisos confiables del perfil.
   developer: >-
-    Propón únicamente la expresión Python exacta en expression y explica en notes.
-    No cambies otros campos; el editor determinista aplica el cambio.
+    Para silver_safe_ratio devuelve únicamente expression exacta y notes.
+    Para general_patch devuelve operations tipadas con op/path/content/expected_sha256
+    y notes, exclusivamente dentro del manifiesto aprobado y de la política.
+    Puedes solicitar contexto de solo lectura mediante el contrato suministrado.
   verifier: >-
-    Revisa el diff y la evidencia de pruebas. Responde approved (boolean),
-    notes (texto) y findings (lista de hallazgos).
+    Revisa como asesor el diff y la evidencia de pruebas. Responde approved (boolean),
+    notes (texto) y findings (lista de recomendaciones). Tu resultado no autoriza
+    ni bloquea publicación; los controles obligatorios son independientes.

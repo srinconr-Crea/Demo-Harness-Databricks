@@ -10,7 +10,15 @@ from pathlib import Path, PurePosixPath
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 
 class Story(BaseModel):
@@ -96,14 +104,44 @@ class SafeRatioStrategy(BaseModel):
         return values
 
 
+class RepositoryPolicy(BaseModel):
+    scope: Literal['prefixes', 'repository'] = 'prefixes'
+    read_only_paths: list[str] = Field(default_factory=lambda: ['.github/', 'openspec/', 'AGENTS.md'])
+    denied_paths: list[str] = Field(default_factory=list)
+    max_searches: int = Field(default=10, ge=1, le=50)
+    max_reads: int = Field(default=20, ge=1, le=100)
+    max_context_bytes: int = Field(default=200000, ge=1000, le=1000000)
+    max_file_bytes: int = Field(default=50000, ge=1000, le=200000)
+    max_rounds: int = Field(default=20, ge=1, le=30)
+    timeout_seconds: int = Field(default=30, ge=1, le=120)
+
+    @field_validator('read_only_paths', 'denied_paths')
+    @classmethod
+    def paths_valid(cls, values):
+        from .repository_policy import valid_relative
+        if any(not valid_relative(p.rstrip('/')) for p in values):
+            raise ValueError('Ruta de política inválida')
+        return values
+
+
+class ImpactRule(BaseModel):
+    paths: list[str] = Field(min_length=1)
+    test_paths: list[str] = Field(default_factory=list)
+    adapters: list[str] = Field(default_factory=list)
+
+
 class GeneralPatchPolicy(BaseModel):
-    allowed_paths: list[str] = Field(min_length=1)
+    allowed_paths: list[str] = Field(default_factory=list)
     extensions: list[str] = Field(min_length=1)
     operations: list[Literal["create", "modify", "delete"]] = Field(min_length=1)
     max_files: int = Field(ge=1, le=300)
     max_bytes: int = Field(ge=1, le=10_000_000)
-    test_adapters: list[Literal["python_compile", "markdown_structure", "pytest_sandbox"]] = Field(min_length=1)
+    test_adapters: list[Literal["python_compile", "markdown_structure", "pytest_sandbox", "sql_lint", "yaml_validate", "json_validate", "toml_validate", "notebook_validate", "databricks_bundle_validate", "text_validate"]] = Field(min_length=1)
     test_paths: list[str] = Field(default_factory=list)
+    impact_rules: list[ImpactRule] = Field(default_factory=list)
+    schemas: dict[str, dict] = Field(default_factory=dict)
+    bundle_target: str | None = Field(default=None, pattern=r'^[a-zA-Z][a-zA-Z0-9_-]{0,63}$')
+    bundle_paths: list[str] = Field(default_factory=lambda: ['databricks.yml', 'resources/'])
 
     @field_validator("allowed_paths")
     @classmethod
@@ -130,6 +168,16 @@ class GeneralPatchPolicy(BaseModel):
     def job_requires_targets(self):
         if "pytest_sandbox" in self.test_adapters and not self.test_paths:
             raise ValueError("El Job sandbox requiere objetivos de prueba configurados")
+        from .repository_policy import valid_relative
+        for rule in self.impact_rules:
+            if any(not valid_relative(p.rstrip('/')) for p in [*rule.paths, *rule.test_paths]):
+                raise ValueError('Regla de impacto inválida')
+            if any(a not in self.test_adapters for a in rule.adapters):
+                raise ValueError('Adaptador de impacto no habilitado')
+        if any(not valid_relative(p.rstrip('/')) for p in self.bundle_paths):
+            raise ValueError('Ruta de bundle inválida')
+        if 'databricks_bundle_validate' in self.test_adapters and not self.bundle_target:
+            raise ValueError('La validación de bundle requiere target confiable')
         return self
 
 
@@ -168,6 +216,7 @@ class OpenSpecAttempt(BaseModel):
 
 class RunAttempt(BaseModel):
     attempt_id: str
+    publication_mode: Literal['diff_review', 'approved_plan'] = 'diff_review'
     state: RunState
     stage: RunStage | None = None
     revision: int = Field(default=0, ge=0)
@@ -191,7 +240,7 @@ class RunAttempt(BaseModel):
 
 
 class RunContract(BaseModel):
-    schema_version: int = 4
+    schema_version: int = 5
     run_id: str
     story_id: str
     story: Story | StoryRequest | None = None
@@ -290,7 +339,8 @@ class ClientProfile(BaseModel):
     version: str = "1"
     repository: str
     base_branch: str
-    allowed_paths: list[str]
+    allowed_paths: list[str] = Field(default_factory=list)
+    repository_policy: RepositoryPolicy = Field(default_factory=RepositoryPolicy)
     openspec_root: Literal["openspec"]
     strategy: SafeRatioStrategy | None = None
     general_patch: GeneralPatchPolicy | None = None
@@ -301,7 +351,9 @@ class ClientProfile(BaseModel):
 
     @model_validator(mode="after")
     def general_paths_within_profile(self):
-        if self.general_patch and any(
+        if self.repository_policy.scope == 'repository' and self.general_patch is None:
+            raise ValueError('El alcance de repositorio requiere general_patch')
+        if self.repository_policy.scope == 'prefixes' and self.general_patch and any(
             not any(path.rstrip("/") == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/") for prefix in self.allowed_paths)
             for path in self.general_patch.allowed_paths
         ):
@@ -309,10 +361,21 @@ class ClientProfile(BaseModel):
         return self
 
     def allows(self, path: str) -> bool:
-        pure = PurePosixPath(path)
-        if pure.is_absolute() or ".." in pure.parts or "\\" in path or path.startswith(".github/"):
+        from .repository_policy import denied, matches
+        policy = self.repository_policy
+        if denied(path, policy.denied_paths) or any(matches(path, p) for p in [
+            '.github', self.openspec_root, 'AGENTS.md', *policy.read_only_paths]):
             return False
-        return any(path == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/") for prefix in self.allowed_paths)
+        return policy.scope == 'repository' or any(matches(path, p) for p in self.allowed_paths)
+
+    def allows_read(self, path: str) -> bool:
+        from .repository_policy import denied
+        return not denied(path, self.repository_policy.denied_paths)
+
+    def allows_code(self, path: str) -> bool:
+        from .repository_policy import matches
+        return self.allows(path) and (self.general_patch is None or self.repository_policy.scope == 'repository'
+            or any(matches(path, p) for p in self.general_patch.allowed_paths))
 
     def allows_openspec(self, path: str) -> bool:
         pure = PurePosixPath(path)

@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -24,17 +25,19 @@ def _sandbox_path(value: str, basename: str) -> Path:
     return Path(value)
 
 
-def run(input_path: str, result_path: str, archive_sha256: str, test_paths: list[str]) -> dict:
+def run(input_path: str, result_path: str, archive_sha256: str, test_paths: list[str], bundle_target: str = '') -> dict:
     source = _sandbox_path(input_path, "input.zip")
     destination = _sandbox_path(result_path, "result.json")
     if source.parent != destination.parent or re.fullmatch(r"[a-f0-9]{64}", archive_sha256) is None:
         raise ValueError("Los artefactos de prueba no coinciden")
-    if not test_paths or any(
+    if (not test_paths and not bundle_target) or any(
         not path or PurePosixPath(path).is_absolute() or "\\" in path
         or any(part in {"", ".", ".."} for part in path.split("/"))
         for path in test_paths
     ):
         raise ValueError("Objetivos de pruebas inválidos")
+    if bundle_target and not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,63}', bundle_target):
+        raise ValueError('Target bundle inválido')
     archive = source.read_bytes()
     if hashlib.sha256(archive).hexdigest() != archive_sha256:
         raise ValueError("El archivo de pruebas no supera la verificación de integridad")
@@ -57,17 +60,25 @@ def run(input_path: str, result_path: str, archive_sha256: str, test_paths: list
             "PATH": os.defpath, "HOME": directory,
             "PYTHONDONTWRITEBYTECODE": "1", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
         }
-        try:
-            completed = subprocess.run(
-                [sys.executable, "-I", "-m", "pytest", "-q", "-p", "no:cacheprovider",
-                 "--disable-warnings", *test_paths],
-                cwd=root, env=environment, capture_output=True, text=True,
-                timeout=600, check=False,
-            )
-            output = (completed.stdout + "\n" + completed.stderr)[-6000:]
-            passed = completed.returncode == 0
-        except subprocess.TimeoutExpired:
-            output, passed = "Las pruebas excedieron 600 segundos", False
+        commands = []
+        if test_paths:
+            commands.append([sys.executable, '-I', '-m', 'pytest', '-q', '-p', 'no:cacheprovider', '--disable-warnings', *test_paths])
+        if bundle_target:
+            executable = shutil.which('databricks')
+            if not executable:
+                raise ValueError('CLI Databricks no disponible en el Job dedicado')
+            commands.append([executable, 'bundle', 'validate', '--strict', '-t', bundle_target])
+        outputs, passed = [], True
+        for command in commands:
+            try:
+                completed = subprocess.run(command, cwd=root, env=environment, capture_output=True,
+                                           text=True, timeout=600, check=False)
+                outputs.append((completed.stdout + '\n' + completed.stderr)[-6000:])
+                passed &= completed.returncode == 0
+            except subprocess.TimeoutExpired:
+                outputs.append('Las pruebas excedieron 600 segundos')
+                passed = False
+        output = '\n'.join(outputs)[-6000:]
     result = {
         "run_id": source.parent.parent.parent.name,
         "attempt_id": source.parent.parent.name,
@@ -87,8 +98,9 @@ def main() -> None:
     parser.add_argument("--result-path", required=True)
     parser.add_argument("--archive-sha256", required=True)
     parser.add_argument("--test-paths", required=True)
+    parser.add_argument('--bundle-target', default='')
     args = parser.parse_args()
-    run(args.input_path, args.result_path, args.archive_sha256, json.loads(args.test_paths))
+    run(args.input_path, args.result_path, args.archive_sha256, json.loads(args.test_paths), args.bundle_target)
 
 
 if __name__ == "__main__":

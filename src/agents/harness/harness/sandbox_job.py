@@ -25,13 +25,15 @@ class SandboxJobRunner:
         self.poll_seconds = poll_seconds
 
     @staticmethod
-    def _archive(root: Path) -> bytes:
+    def _archive(root: Path, profile=None) -> bytes:
         buffer = io.BytesIO()
         count, size = 0, 0
         with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for directory, folders, files in os.walk(root, followlinks=False):
                 current = Path(directory)
-                folders[:] = [name for name in folders if name != ".git"]
+                from .repository_policy import denied
+                folders[:] = [name for name in folders if not denied((current / name).relative_to(root).as_posix(),
+                    profile.repository_policy.denied_paths if profile else ())]
                 if any((current / name).is_symlink() for name in folders):
                     raise ValueError("El sandbox no admite enlaces en el checkout")
                 for name in files:
@@ -39,6 +41,8 @@ class SandboxJobRunner:
                     if path.is_symlink() or not path.is_file():
                         raise ValueError("El sandbox no admite enlaces en el checkout")
                     relative = path.relative_to(root).as_posix()
+                    if denied(relative, profile.repository_policy.denied_paths if profile else ()):
+                        continue
                     data = path.read_bytes()
                     count += 1
                     size += len(data)
@@ -48,15 +52,17 @@ class SandboxJobRunner:
         return buffer.getvalue()
 
     def run(self, root: Path, *, run_id: str, attempt_id: str,
-            revision: int, test_paths: list[str]) -> dict:
+            revision: int, test_paths: list[str], profile=None, bundle_target: str | None = None) -> dict:
         if any(re.fullmatch(r"[a-f0-9]{32}", value) is None for value in (run_id, attempt_id)) or revision < 1:
             raise ValueError("Identidad de prueba inválida")
-        if not test_paths or any(
+        if (not test_paths and not bundle_target) or any(
             not path or path.startswith(("/", ".")) or "\\" in path or ".." in path.split("/")
             for path in test_paths
         ):
             raise ValueError("Rutas de pruebas fuera del perfil")
-        payload = self._archive(root)
+        if bundle_target and re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,63}', bundle_target) is None:
+            raise ValueError('Target bundle inválido')
+        payload = self._archive(root, profile)
         archive_sha = hashlib.sha256(payload).hexdigest()
         prefix = f"{self.volume_dir}/{run_id}/{attempt_id}/{revision}-{archive_sha[:16]}"
         input_path, result_path = f"{prefix}/input.zip", f"{prefix}/result.json"
@@ -68,6 +74,7 @@ class SandboxJobRunner:
             "job_parameters": {
                 "input_path": input_path, "result_path": result_path,
                 "archive_sha256": archive_sha, "test_paths": json.dumps(test_paths),
+                "bundle_target": bundle_target or '',
             },
         })
         job_run_id = request.get("run_id")

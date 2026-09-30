@@ -50,7 +50,7 @@
   <header>
     <small>OpenSpec · Databricks</small>
     <h1>De historia de usuario a pull request</h1>
-    <p>Describe la HU para <span id="project-name">el cliente configurado</span>. Revisa el plan y el diff en esta App. El PR sigue requiriendo revisión y merge humanos en GitHub.</p>
+    <p>Describe la HU para <span id="project-name">el cliente configurado</span>. Aprueba la propuesta para aplicar, verificar y crear el PR automáticamente. Revisa el PR y realiza el merge en GitHub.</p>
   </header>
   <div class="grid">
     <section>
@@ -67,20 +67,24 @@
       <h2>Conversación <span id="state" class="chip"></span></h2>
       <p class="muted">HU: <strong id="story-id"></strong> · Revisión <span id="revision"></span></p>
       <div id="messages" aria-live="polite"></div>
-      <div id="events"></div>
-      <div id="live-artifacts"></div>
+      <div id="checklist" aria-live="polite"></div>
+      <div id="advisory"></div>
       <div id="review" class="review" hidden>
         <h3 id="review-title"></h3>
         <p id="review-hint" class="muted"></p>
-        <div id="artifacts"></div>
-        <div id="diff-panel" hidden><pre id="diff"></pre></div>
+        <div id="proposal-summary" class="message"></div>
+        <details><summary>Especificaciones y diseño completos</summary><div id="artifacts"></div></details>
         <label id="feedback-label" hidden>Respuesta o cambios pedidos<textarea id="feedback"></textarea></label>
         <div id="review-actions" class="row"></div>
       </div>
       <div id="publication"></div>
       <div id="recovery"></div>
-      <h3>Modelos y costos estimados</h3>
-      <div id="calls" class="muted">Esperando llamadas…</div>
+      <details id="technical-details"><summary>Detalle técnico, artefactos y costos</summary>
+        <button type="button" id="consult-diff" class="secondary">Consultar diff final</button>
+        <div id="diff-panel" hidden><pre id="diff"></pre></div>
+        <div id="events"></div><div id="live-artifacts"></div>
+        <h3>Modelos y costos estimados</h3><div id="calls" class="muted">Esperando llamadas…</div>
+      </details>
       <p id="action-error" class="error" role="alert"></p>
     </section>
   </div>
@@ -91,6 +95,8 @@ const stateEl=document.getElementById('state'), messagesEl=document.getElementBy
 const eventsEl=document.getElementById('events'), reviewEl=document.getElementById('review');
 const actionsEl=document.getElementById('review-actions'), artifactsEl=document.getElementById('artifacts');
 const feedback=document.getElementById('feedback'), feedbackLabel=document.getElementById('feedback-label');
+feedback.addEventListener('input',()=>{if(runId){sessionStorage.setItem(runId+':feedback',feedback.value);sessionStorage.setItem(runId+':'+current?.attempts.at(-1).revision+':feedback',feedback.value);}});
+document.getElementById('consult-diff').addEventListener('click',showDiff);
 let runId=new URLSearchParams(location.search).get('run'), current=null, eventCursor=0, timer=null, lastReviewKey='', lastLiveArtifactKey='';
 const stageLabels={queued:'En cola',running:'En proceso',exploring:'Explorando la HU',awaiting_clarification:'Esperando aclaración',proposing:'Preparando el plan',awaiting_plan_review:'Esperando revisión del plan',updating:'Actualizando el plan',applying:'Aplicando cambios',verifying:'Verificando',preparing_final_diff:'Preparando el diff',awaiting_diff_review:'Esperando revisión del diff',publishing:'Creando el PR',complete:'Completado',failed:'Falló',cancelled:'Cancelado'};
 const eventLabels={explore:'Exploración',clarification:'Respuesta recibida',artifact_ready:'Artefacto disponible',propose:'Plan preparado',update:'Plan actualizado',plan_changes:'Cambios pedidos al plan',plan_approved:'Plan aprobado',apply:'Cambios aplicados',verify:'Verificación',verify_failed:'Se requiere una corrección',sync:'Specs sincronizados',archive:'Cambio OpenSpec archivado',diff_ready:'Diff listo para revisión',diff_changes:'Cambios pedidos al diff',diff_approved:'Diff aprobado',pr_created:'PR creado',error:'Error de la etapa',base_advanced:'La rama base cambió'};
@@ -135,22 +141,31 @@ function showReview(run) {
   if(reviewKey===lastReviewKey) return;
   lastReviewKey=reviewKey;
   actionStatus('');
-  reviewEl.hidden=!['awaiting_clarification','awaiting_plan_review','awaiting_diff_review'].includes(stage);
-  actionsEl.replaceChildren();artifactsEl.replaceChildren();feedback.value='';feedbackLabel.hidden=true;
+  reviewEl.hidden=!['awaiting_clarification','awaiting_plan_review','awaiting_diff_review','updating'].includes(stage);
+  actionsEl.replaceChildren();artifactsEl.replaceChildren();feedback.value=sessionStorage.getItem(runId+':'+attempt.revision+':feedback')??sessionStorage.getItem(runId+':feedback')??'';feedbackLabel.hidden=true;
+  document.getElementById('proposal-summary').textContent='';
   document.getElementById('diff-panel').hidden=true;
   if(stage==='awaiting_clarification') {
     document.getElementById('review-title').textContent='Aclaración';
     document.getElementById('review-hint').textContent=(attempt.context?.questions||[]).join('\n');
     feedbackLabel.hidden=false;button('Responder','answer');button('Cancelar','cancel','danger');
   } else if(stage==='awaiting_plan_review') {
-    document.getElementById('review-title').textContent='Revisar propuesta y specs';
-    document.getElementById('review-hint').textContent='Aprueba la revisión '+attempt.revision+' antes de aplicar cambios de código.';
+    document.getElementById('review-title').textContent='Revisar propuesta';
+    document.getElementById('review-hint').textContent='Aprobar la revisión '+attempt.revision+' autoriza implementar, verificar y crear el PR automáticamente. Puedes pedir cambios antes de aprobar.';
+    const plan=attempt.context?.plan_metadata||{};
+    const summary=document.getElementById('proposal-summary');summary.textContent=plan.summary||'Propuesta disponible en los artefactos.';
+    for(const item of plan.manifest||[])summary.append(node('p',item.op+' · '+item.path+' (cambio previsto)'));
+    summary.append(node('p','Pruebas previstas: '+[...new Set((plan.validation_plan?.checks||[]).map(item=>item.adapter))].join(', ')));
     showArtifacts(attempt);feedbackLabel.hidden=false;
     button('Aprobar plan','approve');button('Pedir cambios','changes','secondary');button('Cancelar','cancel','danger');
+  } else if(stage==='updating') {
+    document.getElementById('review-title').textContent='Actualizando propuesta';
+    document.getElementById('review-hint').textContent='Tus comentarios se conservan. La nueva revisión requerirá aprobación.';
+    feedbackLabel.hidden=false;
   } else if(stage==='awaiting_diff_review') {
     document.getElementById('review-title').textContent='Revisar diff final';
     document.getElementById('review-hint').textContent='Incluye código y OpenSpec sincronizado y archivado. La aprobación permite crear el PR.';
-    showDiff();feedbackLabel.hidden=false;
+    document.getElementById('technical-details').open=true;showDiff();feedbackLabel.hidden=false;
     button('Aprobar diff y crear PR','approve');button('Pedir cambios','changes','secondary');button('Cancelar','cancel','danger');
   }
 }
@@ -166,7 +181,7 @@ async function poll() {
   try {
     const run=await jsonRequest('/runs/'+runId);current=run;document.getElementById('conversation').hidden=false;
     const attempt=run.attempts.at(-1);stateEl.textContent=stageLabels[run.state]||run.state;document.getElementById('story-id').textContent=run.story_id;document.getElementById('revision').textContent=attempt.revision;
-    showMessages(attempt);showReview(run);showLiveArtifacts(attempt);await showCalls();
+    showMessages(attempt);showReview(run);showLiveArtifacts(attempt);await showCalls();showChecklist(run);
     const page=await jsonRequest('/runs/'+runId+'/events?after='+eventCursor+'&limit=100');
     for(const event of page.events){const card=node('div',undefined,'event');card.append(node('strong',(eventLabels[event.kind]||event.kind)+' · Revisión '+event.revision));card.append(node('span',eventDescription(event)));const data=node('details');data.append(node('summary','Ver datos de la etapa'),node('pre',JSON.stringify(event.details||{},null,2)));card.append(data);eventsEl.append(card);}eventCursor=page.next;
     const publication=document.getElementById('publication');publication.replaceChildren();
@@ -188,6 +203,13 @@ form.addEventListener('submit',async event=>{event.preventDefault();const submit
   try {const payload=Object.fromEntries(new FormData(form).entries());const data=await jsonRequest('/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});runId=data.run_id;history.replaceState(null,'','?run='+runId);eventCursor=0;lastReviewKey='';lastLiveArtifactKey='';eventsEl.replaceChildren();clearTimeout(timer);poll();}
   catch(error){document.getElementById('form-error').textContent=error.message;}finally{submit.disabled=false;}
 });
+function showChecklist(run){
+  const target=document.getElementById('checklist');target.replaceChildren();
+  const labels={ok:'OK',pending:'Pendiente',running:'En curso',failed:'Falló',blocked:'Esperando respuesta',not_applicable:'No aplica'};
+  for(const item of run.checklist||[]){const date=item.at?new Date(item.at).toLocaleString('es-CO',{timeZone:'America/Bogota'}):'—';target.append(node('p',item.phase+': '+(labels[item.status]||item.status)+' · '+date));}
+  const advice=run.attempts.at(-1).context?.advisory;const area=document.getElementById('advisory');area.replaceChildren();
+  if(advice){const detail=node('details');detail.append(node('summary','Recomendaciones de Haiku · '+(advice.status==='complete'?'Revisión asesora':'No disponible')));for(const finding of advice.findings||[])detail.append(node('p',typeof finding==='string'?finding:JSON.stringify(finding)));area.append(detail);}
+}
 fetch('/configuration').then(response=>response.json()).then(config=>{document.getElementById('project-name').textContent=config.ui?.display_name||config.profile||'el cliente configurado';}).catch(()=>{});
 if(runId) poll();
 </script>

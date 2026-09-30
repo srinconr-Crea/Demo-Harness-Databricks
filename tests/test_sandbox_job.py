@@ -5,7 +5,6 @@ import zipfile
 from pathlib import Path
 
 import pytest
-
 from harness.sandbox_job import SandboxJobRunner
 
 
@@ -112,3 +111,37 @@ def test_sandbox_script_rejects_archive_traversal(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(script, "_sandbox_path", lambda _value, name: directory / name)
     with pytest.raises(ValueError, match="inválid"):
         script.run("input", "result", digest, ["tests"])
+
+
+@pytest.mark.parametrize('outcome', ['passed', 'failed', 'timeout', 'missing_cli', 'missing_target'])
+def test_bundle_validation_is_fixed_bounded_and_mandatory(tmp_path, monkeypatch, outcome):
+    import subprocess
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    path = Path(__file__).resolve().parents[1] / 'src/agents/harness/app/sandbox_job_runner.py'
+    spec = spec_from_file_location('sandbox_bundle_runner', path)
+    script = module_from_spec(spec)
+    spec.loader.exec_module(script)
+    directory = tmp_path / ('a' * 32) / ('b' * 32) / '1-abcdef0123456789'
+    directory.mkdir(parents=True)
+    source = directory / 'input.zip'
+    with zipfile.ZipFile(source, 'w') as archive:
+        archive.writestr('databricks.yml', 'bundle:\n  name: synthetic\n')
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    monkeypatch.setattr(script, '_sandbox_path', lambda _value, name: directory / name)
+    monkeypatch.setattr(script.shutil, 'which', lambda _name: None if outcome == 'missing_cli' else '/trusted/databricks')
+    def execute(command, **kwargs):
+        assert command == ['/trusted/databricks', 'bundle', 'validate', '--strict', '-t', 'sandbox']
+        assert kwargs['timeout'] == 600 and 'DATABRICKS_TOKEN' not in kwargs['env']
+        assert not kwargs.get('shell')
+        if outcome == 'timeout':
+            raise subprocess.TimeoutExpired(command, 600)
+        return subprocess.CompletedProcess(command, 1 if outcome == 'failed' else 0, 'x' * 8000, '')
+    monkeypatch.setattr(script.subprocess, 'run', execute)
+    if outcome in {'missing_cli', 'missing_target'}:
+        with pytest.raises(ValueError, match='CLI|Objetivos'):
+            script.run('input', 'result', digest, [], '' if outcome == 'missing_target' else 'sandbox')
+    else:
+        result = script.run('input', 'result', digest, [], 'sandbox')
+        assert result['passed'] == (outcome == 'passed')
+        assert len(result['evidence'][0]) <= 6000

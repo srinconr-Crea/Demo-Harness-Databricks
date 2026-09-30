@@ -9,9 +9,9 @@ import re
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 import yaml
 
@@ -178,6 +178,7 @@ class PlanResult:
     change_id: str
     artifacts: dict[str, str]
     hashes: dict[str, str]
+    metadata: dict = field(default_factory=dict)
 
 
 def propose_client_change(
@@ -185,6 +186,7 @@ def propose_client_change(
     models, *, source_summary: str = "", feedback: str | None = None,
     revision: int = 0,
     on_artifact: Callable[[str, str, str], None] | None = None,
+    profile: ClientProfile | None = None,
 ) -> PlanResult:
     """Generate or revise the four schema artifacts with fixed paths and strict validation."""
     if re.fullmatch(r"[a-z0-9][a-z0-9-]{2,90}", change_id) is None:
@@ -200,6 +202,9 @@ def propose_client_change(
     }
     artifacts: dict[str, str] = {}
     hashes: dict[str, str] = {}
+    metadata = {}
+    from .repo_context import RepoContext, contextual_answer
+    repo_context = RepoContext(root, profile) if profile else None
     for artifact, suffix in output_names.items():
         instructions = cli.instructions(root, artifact, change_id)
         if instructions.get("schemaName") != "spec-driven" or Path(instructions.get("changeDir", "")).resolve() != change_root.resolve():
@@ -207,7 +212,7 @@ def propose_client_change(
         target = change_root / Path(suffix)
         if artifact != "specs" and Path(instructions.get("resolvedOutputPath", "")).resolve() != target.resolve():
             raise ValueError("OpenSpec resolvió un artefacto fuera del cambio cliente")
-        prompt = json.dumps({
+        prompt = {
             "workflow": "update" if feedback else "propose",
             "artifact": artifact,
             "instructions": instructions.get("instruction"),
@@ -219,17 +224,33 @@ def propose_client_change(
             "feedback": feedback,
             "existing_artifact": target.read_text(encoding="utf-8")[:50000] if target.is_file() else None,
             "output_path": suffix,
-            "response_format": {"content": "texto Markdown completo del artefacto"},
-        }, ensure_ascii=False)
-        response = models.complete("planner", prompt, stage="updating" if feedback else "proposing",
-                                   revision=revision, max_tokens=6000)
-        try:
-            parsed = json.loads(response.text)
-        except json.JSONDecodeError as error:
-            raise ValueError("El planner devolvió un artefacto OpenSpec inválido") from error
+            "response_format": {"content": "texto Markdown completo del artefacto",
+                "summary": "Objetivo, comportamiento esperado y cambios previstos en español",
+                "manifest": [{'op': 'create|modify|delete', 'path': 'ruta exacta de código prevista'}]},
+            "policy": profile.model_dump() if profile else None,
+            "approved_manifest_contract": 'Para proposal de general_patch, manifest y summary son obligatorios. No son el diff real. La aprobación autoriza crear el PR automáticamente después de verificar, sincronizar y archivar.',
+        }
+        parsed = contextual_answer(models, 'planner', prompt, repo_context,
+            stage='updating' if feedback else 'proposing', revision=revision, max_tokens=6000)
         if not isinstance(parsed, dict) or not isinstance(parsed.get("content"), str) or not 20 <= len(parsed["content"]) <= 50000:
             raise ValueError("El planner devolvió un artefacto OpenSpec inválido")
         content = parsed["content"].strip() + "\n"
+        if artifact == 'proposal' and profile:
+            if profile.general_patch:
+                manifest, summary = parsed.get('manifest'), parsed.get('summary')
+                policy = profile.general_patch
+                if not isinstance(summary, str) or not 1 <= len(summary) <= 10000 or not isinstance(manifest, list) or not 1 <= len(manifest) <= policy.max_files:
+                    raise ValueError('La propuesta requiere resumen y manifiesto explícitos')
+                paths = set()
+                for item in manifest:
+                    if not isinstance(item, dict) or set(item) != {'op', 'path'} or item['op'] not in policy.operations or not isinstance(item['path'], str) or not profile.allows_code(item['path']) or Path(item['path']).suffix not in policy.extensions or item['path'] in paths:
+                        raise ValueError('El manifiesto excede la política del cliente')
+                    paths.add(item['path'])
+                from .validation import validation_plan
+                metadata = {'summary': summary, 'manifest': manifest, 'validation_plan': validation_plan(profile, sorted(paths))}
+            else:
+                metadata = {'summary': content, 'manifest': [{'op': 'modify', 'path': profile.strategy.notebook}],
+                            'validation_plan': {'checks': [{'adapter': 'silver_safe_ratio', 'reason': 'tres filas sintéticas'}]}}
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         path = target.relative_to(root).as_posix()
@@ -238,7 +259,7 @@ def propose_client_change(
         if on_artifact:
             on_artifact(path, content, hashes[path])
     cli.validate(root, change_id)
-    return PlanResult(change_id, artifacts, hashes)
+    return PlanResult(change_id, artifacts, hashes, metadata)
 
 
 def plan_client_change(

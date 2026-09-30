@@ -24,13 +24,15 @@ context: |
   base completo y exige que openspec/config.yaml ya esté versionado. El flujo
   durable explora la HU, genera o actualiza propuesta, especificaciones, diseño
   y tareas, espera aprobación humana del plan, aplica código, verifica, sincroniza
-  y archiva el cambio. Después muestra el diff final para aprobación en la App.
+  y archiva el cambio. En ejecuciones nuevas, aprobar plan y manifiesto autoriza
+  automáticamente el PR del candidato íntegro verificado; el diff sigue consultable.
+  Los intentos históricos conservan la modalidad de aprobación original.
   Código y OpenSpec viajan juntos en feature/* y un Pull Request; el merge y
   despliegue siguen siendo humanos.
 
   Los flujos OpenSpec de exploración, planificación y verificación usan
   databricks-claude-sonnet-5; apply llama al desarrollador. El verificador
-  independiente usa el modelo configurado. La estrategia silver_safe_ratio
+  independiente Haiku 4.5 es asesor y no bloquea. La estrategia silver_safe_ratio
   conserva su editor y prueba SQL sintética. Los perfiles pueden habilitar
   general_patch para cambios tipados de archivos bajo rutas, extensiones,
   operaciones y tamaños autorizados; el código se prueba en un Job Databricks

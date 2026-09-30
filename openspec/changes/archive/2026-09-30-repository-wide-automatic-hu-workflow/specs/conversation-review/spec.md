@@ -1,10 +1,6 @@
-# conversation-review Specification
+# Spec Delta
 
-## Purpose
-
-Permitir que la persona converse sobre una HU y revise el progreso, los artefactos y el código producidos en etapas, con decisiones vinculadas a versiones concretas.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Progreso conversacional por HU
 La App SHALL mostrar preguntas necesarias, respuestas humanas y propuesta vigente en lenguaje natural con acceso al detalle técnico bajo demanda. SHALL ocultar por defecto comandos, JSON y artefactos intermedios, conservando trazabilidad por intento y revisión. SHALL mantener comentarios y borradores durante revisión y actualización sin borrarlos por polling. Costos y artefactos SHALL seguir consultables.
@@ -25,17 +21,6 @@ La App SHALL mostrar preguntas necesarias, respuestas humanas y propuesta vigent
 - **WHEN** llega una actualización de estado mientras la persona escribe
 - **THEN** el comentario conserva su contenido
 
-### Requirement: Aprobación del plan antes de desarrollar
-El harness SHALL detenerse tras validar la versión propuesta de los artefactos OpenSpec y requerir aprobación humana de esa versión antes de invocar `apply`. La persona SHALL poder pedir cambios, que generan una nueva versión y otra revisión.
-
-#### Scenario: Plan aprobado
-- **WHEN** la persona aprueba la versión vigente y validada del plan
-- **THEN** el harness habilita `apply` para esa versión
-
-#### Scenario: Plan devuelto con cambios
-- **WHEN** la persona solicita una revisión del plan
-- **THEN** el planner ejecuta `update`, la aprobación anterior pierde vigencia y el desarrollo permanece bloqueado
-
 ### Requirement: Aprobación del diff final
 El harness SHALL sustituir la espera de aprobación final del diff por continuación automática autorizada mediante el plan vigente. SHALL conservar el diff completo y evidencia para consulta y revisión en el PR sin registrar aprobaciones humanas ficticias. Una ampliación del alcance o ambigüedad funcional SHALL devolver el flujo a revisión de propuesta.
 
@@ -46,10 +31,3 @@ El harness SHALL sustituir la espera de aprobación final del diff por continuac
 #### Scenario: Diff cambiado tras aprobación
 - **WHEN** se alteran bytes del candidato verificado
 - **THEN** se bloquea publicación hasta nueva verificación y nueva aprobación del plan si cambia su alcance
-
-### Requirement: Decisiones humanas autorizadas y persistentes
-Las respuestas, solicitudes de cambios y aprobaciones SHALL estar vinculadas a una identidad autorizada, etapa, intento y huella de contenido; los estados de espera SHALL sobrevivir a reinicios sin ocupar un trabajador de ejecución.
-
-#### Scenario: Decisión desactualizada
-- **WHEN** llega una aprobación para una versión distinta de la que espera revisión
-- **THEN** el harness la rechaza y conserva la versión vigente sin publicarla

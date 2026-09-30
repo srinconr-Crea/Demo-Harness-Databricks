@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Literal
@@ -16,7 +18,6 @@ from pydantic import BaseModel, Field, ValidationError
 
 from .contracts import StoryRequest
 from .models import sanitize_log_value
-
 
 INDEX = Path(__file__).resolve().parents[1] / "app" / "index.html"
 
@@ -56,10 +57,11 @@ def create_conversation_app(engine, profile) -> FastAPI:
                     timeline = attempt.setdefault("timeline", [])
                     timeline.append({"seq": len(timeline) + 1, "stage": attempt.get("stage"),
                                      "kind": "error", "revision": attempt.get("revision", 0),
+                                     "at": datetime.now(timezone.utc).isoformat(),
                                      "details": {"message": sanitize_log_value(str(error), 1000)}})
                     engine._save(record)
-                except Exception:
-                    pass
+                except Exception as persistence_error:  # noqa: BLE001 - background worker boundary
+                    logging.getLogger(__name__).error('No se pudo persistir el fallo: %s', type(persistence_error).__name__)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -68,7 +70,8 @@ def create_conversation_app(engine, profile) -> FastAPI:
                 record = engine.get(run_id)
                 if record["state"] in {"queued", "running"}:
                     executor.submit(background, run_id)
-            except Exception:
+            except Exception as recovery_error:  # noqa: BLE001 - recover other runs independently
+                logging.getLogger(__name__).error('No se pudo recuperar el intento: %s', type(recovery_error).__name__)
                 continue
         yield
         executor.shutdown(wait=True)
@@ -177,7 +180,7 @@ def create_conversation_app(engine, profile) -> FastAPI:
         attempt = record["attempts"][-1]
         context = attempt.get("context") or {}
         digest = context.get("diff_sha256")
-        if not digest or record["state"] not in {"awaiting_diff_review", "complete"}:
+        if not digest or attempt['stage'] not in {'awaiting_diff_review', 'publishing', 'complete'}:
             raise HTTPException(status_code=409, detail="El diff final todavía no está disponible")
         return {"revision": attempt["revision"], "candidate_hash": context["candidate_hash"],
                 "diff_sha256": digest,

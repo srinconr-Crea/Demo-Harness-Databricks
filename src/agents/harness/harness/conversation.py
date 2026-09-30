@@ -15,11 +15,17 @@ from pathlib import Path
 
 from .checkout import GitCheckout, restore_checkpoint, snapshot_changes
 from .contracts import RunAttempt, RunContract, Story, StoryRequest
-from .models import sanitize_log_value
-from .openspec import OpenSpecCLI, mark_tasks_complete, prepare_client_workspace, propose_client_change
+from .models import ModelInvocationError, sanitize_log_value
+from .openspec import (
+    OpenSpecCLI,
+    mark_tasks_complete,
+    prepare_client_workspace,
+    propose_client_change,
+)
 from .patch import FileOperation, apply_file_operations
+from .repo_context import ContextResponseError, RepoContext, contextual_answer
+from .repository_policy import safe_target
 from .strategies import get_editor
-
 
 _WAITS = {"awaiting_clarification", "awaiting_plan_review", "awaiting_diff_review"}
 _FINAL = {"complete", "failed", "cancelled"}
@@ -29,23 +35,8 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _json_answer(models, role: str, prompt: dict, *, stage: str, revision: int, approved_hash: str | None = None) -> dict:
-    response = models.complete(
-        role, json.dumps(prompt, ensure_ascii=False), stage=stage,
-        revision=revision, approved_sha256=approved_hash,
-    )
-    body = response.text.strip()
-    if body.startswith("```json") and body.endswith("```"):
-        body = body[7:-3].strip()
-    try:
-        value = json.loads(body)
-    except json.JSONDecodeError as error:
-        raise ValueError(f"El rol {role} devolvió JSON inválido") from error
-    if not isinstance(value, dict):
-        raise ValueError(f"El rol {role} devolvió un contrato inválido")
-    return value
-
-
+def _json_answer(models, role: str, prompt: dict, *, stage: str, revision: int, approved_hash: str | None = None, repo_context=None) -> dict:
+    return contextual_answer(models, role, prompt, repo_context, stage=stage, revision=revision, approved_sha256=approved_hash)
 def _hash_files(base_sha: str, files: dict[str, bytes | None]) -> str:
     digest = hashlib.sha256(bytes.fromhex(base_sha))
     for path, contents in sorted(files.items()):
@@ -61,7 +52,7 @@ def _hash_files(base_sha: str, files: dict[str, bytes | None]) -> str:
 def _source_summary(root: Path, profile) -> str:
     selected = []
     total = 0
-    for prefix in profile.allowed_paths:
+    for prefix in (profile.allowed_paths or ['']):
         directory = root / prefix
         if not directory.is_dir():
             continue
@@ -69,8 +60,9 @@ def _source_summary(root: Path, profile) -> str:
             if not path.is_file() or path.is_symlink():
                 continue
             relative = path.relative_to(root).as_posix()
-            if not profile.allows(relative) or path.stat().st_size > 20_000:
+            if not profile.allows_read(relative) or path.stat().st_size > 20_000:
                 continue
+            safe_target(root, relative)
             try:
                 contents = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
@@ -108,7 +100,7 @@ def _diff(root: Path, base_sha: str, files: dict[str, bytes | None]) -> str:
 
 class ConversationEngine:
     def __init__(self, profile, store, coordinator, github_factory, models_factory,
-                 cli: OpenSpecCLI, test_runner):
+                 cli: OpenSpecCLI, test_runner, *, publication_mode='approved_plan'):
         self.profile = profile
         self.store = store
         self.coordinator = coordinator
@@ -116,6 +108,9 @@ class ConversationEngine:
         self.models_factory = models_factory
         self.cli = cli
         self.test_runner = test_runner
+        if publication_mode not in {'approved_plan', 'diff_review'}:
+            raise ValueError('Modalidad de publicación inválida')
+        self.publication_mode = publication_mode
 
     def _save(self, record: dict) -> None:
         self.store.save(record["run_id"], RunContract.model_validate(record).model_dump(mode="json"))
@@ -129,6 +124,7 @@ class ConversationEngine:
         timestamp = _now()
         attempt = RunAttempt(
             attempt_id=attempt_id, state="queued", stage="exploring",
+            publication_mode=self.publication_mode,
             queued_at=timestamp, messages=[{"kind": "story", "actor": actor, "text": story.description, "at": timestamp}],
         )
         record = RunContract(
@@ -159,6 +155,8 @@ class ConversationEngine:
             self._save(record)
         elif row and row["stage"] != attempt.get("stage"):
             raise ValueError("La coordinación avanzó sin un checkpoint recuperable")
+        from .progress import checklist
+        record['checklist'] = checklist(record['attempts'][-1])
         return record
 
     @staticmethod
@@ -292,7 +290,9 @@ class ConversationEngine:
         raise RuntimeError("El flujo excedió el número de transiciones consecutivas")
 
     def _allows(self, path: str) -> bool:
-        return self.profile.allows(path) or self.profile.allows_openspec(path)
+        policy = self.profile.general_patch
+        return self.profile.allows_openspec(path) or (self.profile.allows_code(path)
+            and (policy is None or Path(path).suffix in policy.extensions))
 
     def _step(self, root: Path, record: dict, attempt: dict, github, models, action: dict | None) -> str:
         stage = attempt["stage"]
@@ -303,7 +303,8 @@ class ConversationEngine:
             result = _json_answer(models, "explorer", {
                 "task": "Explorar la HU, resumirla y preguntar solo lo necesario. JSON: summary, questions[]",
                 "story": story.model_dump(), "source_summary": _source_summary(root, self.profile),
-            }, stage=stage, revision=revision)
+                "clarifications": context.get('clarifications', []),
+            }, stage=stage, revision=revision, repo_context=RepoContext(root, self.profile))
             questions = result.get("questions")
             if not isinstance(result.get("summary"), str) or not isinstance(questions, list) or any(not isinstance(question, str) for question in questions) or len(questions) > 5:
                 raise ValueError("Explore devolvió un contrato inválido")
@@ -312,15 +313,17 @@ class ConversationEngine:
             if questions:
                 context["questions"] = questions
                 return "awaiting_clarification"
+            context.pop('questions', None)
             return "proposing"
         if stage == "awaiting_clarification":
             if action["kind"] == "cancel":
                 self._event(attempt, "cancel", actor=action["actor"])
                 return "cancelled"
             attempt["messages"].append({"kind": "clarification", "actor": action["actor"], "text": action["text"], "at": _now()})
-            context["clarification"] = action["text"]
+            context.setdefault('clarifications', []).append(action['text'])
+            context['clarification'] = '\n'.join(context['clarifications'])
             self._event(attempt, "clarification", actor=action["actor"])
-            return "proposing"
+            return "exploring"
         if stage in {"proposing", "updating"}:
             change_id = context.get("change_id")
             if not change_id:
@@ -333,10 +336,13 @@ class ConversationEngine:
                 source_summary=_source_summary(root, self.profile) + "\n" + context.get("clarification", ""),
                 feedback=feedback,
                 revision=revision + 1,
+                profile=self.profile,
                 on_artifact=lambda path, content, digest: self._save_artifact(record, attempt, path, content, digest),
             )
             attempt["revision"] += 1
-            context["plan_hash"] = _hash_files(attempt["base_sha"], {path: content.encode("utf-8") for path, content in plan.artifacts.items()})
+            context['plan_metadata'] = plan.metadata
+            context['plan_paths'] = sorted(plan.artifacts)
+            context["plan_hash"] = self._current_plan_hash(root, attempt)
             context.pop("candidate_hash", None)
             self._event(attempt, "update" if stage == "updating" else "propose", plan_hash=context["plan_hash"], artifact_paths=sorted(plan.artifacts))
             return "awaiting_plan_review"
@@ -356,19 +362,29 @@ class ConversationEngine:
             approved = next((item for item in reversed(attempt["approvals"]) if item["kind"] == "plan" and item["revision"] == revision), None)
             if not approved or approved["sha256"] != context["plan_hash"]:
                 raise ValueError("Apply requiere un plan aprobado vigente")
+            if context['plan_hash'] != self._current_plan_hash(root, attempt):
+                raise ValueError('Los bytes del plan ya no coinciden con la aprobación')
             change_root = root / "openspec" / "changes" / context["change_id"]
-            artifacts = {path.name: path.read_text(encoding="utf-8")[:50000] for path in change_root.glob("*.md")}
+            artifacts = {path.relative_to(change_root).as_posix(): path.read_text(encoding='utf-8')
+                         for path in change_root.rglob('*.md')}
             if self.profile.general_patch:
                 proposal = _json_answer(models, "developer", {
                     "task": "Aplicar las tareas aprobadas. Responder JSON operations[] con op/path/content/expected_sha256 y notes.",
                     "story": story.model_dump(), "artifacts": artifacts,
                     "source_summary": _source_summary(root, self.profile),
                     "allowed_paths": self.profile.general_patch.allowed_paths,
-                }, stage=stage, revision=revision, approved_hash=approved["sha256"])
+                    'approved_manifest': context['plan_metadata']['manifest'],
+                }, stage=stage, revision=revision, approved_hash=approved["sha256"], repo_context=RepoContext(root, self.profile))
                 raw = proposal.get("operations")
                 if not isinstance(raw, list):
                     raise ValueError("El desarrollador no devolvió operaciones tipadas")
-                paths = apply_file_operations(root, self.profile, [FileOperation.model_validate(item) for item in raw])
+                operations = [FileOperation.model_validate(item) for item in raw]
+                allowed = {(item['op'], item['path']) for item in context['plan_metadata']['manifest']}
+                if {(item.op, item.path) for item in operations} != allowed:
+                    context['feedback'] = 'El desarrollador requiere archivos u operaciones fuera del manifiesto aprobado; revisar alcance.'
+                    self._event(attempt, 'scope_changed')
+                    return 'updating'
+                paths = apply_file_operations(root, self.profile, operations)
             else:
                 paths = self._apply_ratio(root, story, models, attempt, approved)
             context["changed_code_paths"] = paths
@@ -378,6 +394,8 @@ class ConversationEngine:
             paths = context.get("changed_code_paths") or []
             evidence = self.test_runner(root, self.profile, paths, record, attempt)
             context["tests"] = evidence
+            context['verified_code_hash'] = _hash_files(attempt['base_sha'], {
+                p: (safe_target(root, p).read_bytes() if safe_target(root, p).exists() else None) for p in paths})
             if not isinstance(evidence, dict) or evidence.get("passed") is not True:
                 self._event(attempt, "verify_failed", evidence=evidence)
                 context["correction_count"] = context.get("correction_count", 0) + 1
@@ -388,19 +406,30 @@ class ConversationEngine:
             changed = snapshot_changes(root, attempt["base_sha"], self._allows)
             diff = _diff(root, attempt["base_sha"], changed)
             plan = (root / "openspec" / "changes" / context["change_id"] / "tasks.md").read_text(encoding="utf-8")
-            spec_path = root / "openspec" / "changes" / context["change_id"] / "specs" / context["change_id"] / "spec.md"
-            specs = spec_path.read_text(encoding="utf-8")
+            spec_root = root / "openspec" / "changes" / context["change_id"] / "specs"
+            specs = {path.relative_to(spec_root).as_posix(): path.read_text(encoding='utf-8')
+                     for path in spec_root.rglob('*.md')}
             check = _json_answer(models, "openspec_verifier", {
                 "task": "Contrastar especificaciones, tareas, pruebas y diff. JSON approved, findings[]",
-                "story": story.model_dump(), "specs": specs[:20000], "tasks": plan[:20000],
-                "test_evidence": evidence, "diff": diff[:20000],
+                "story": story.model_dump(), "specs": specs, "tasks": plan,
+                "test_evidence": evidence, "diff": diff,
             }, stage=stage, revision=revision, approved_hash=context["plan_hash"])
-            independent = _json_answer(models, "verifier", {
-                "task": "Revisión independiente del diff y las pruebas. JSON approved, findings[]",
-                "story": story.model_dump(), "test_evidence": evidence, "diff": diff[:20000],
-            }, stage=stage, revision=revision, approved_hash=context["plan_hash"])
-            if check.get("approved") is not True or independent.get("approved") is not True:
-                findings = list(check.get("findings") or []) + list(independent.get("findings") or [])
+            try:
+                independent = _json_answer(models, 'verifier', {
+                    'task': 'Revisión asesora independiente. JSON approved, findings[]. Nunca decide la publicación.',
+                    'story': story.model_dump(), 'test_evidence': evidence, 'diff': diff[:20000],
+                    'diff_truncated': len(diff) > 20000,
+                }, stage=stage, revision=revision, approved_hash=context['plan_hash'])
+                if not isinstance(independent.get('approved'), bool) or not isinstance(independent.get('findings'), list):
+                    raise ContextResponseError('Contrato de asesor inválido')
+                context['advisory'] = {'status': 'complete', **independent}
+            except (ModelInvocationError, TimeoutError, ContextResponseError) as error:
+                context['advisory'] = {'status': 'unavailable', 'error': type(error).__name__, 'findings': []}
+            calls = getattr(models, 'calls', [])
+            context['advisory']['call_id'] = getattr(calls[-1], 'call_id', None) if calls else None
+            self._event(attempt, 'advisory', **context['advisory'])
+            if check.get("approved") is not True:
+                findings = list(check.get("findings") or [])
                 context["correction_count"] = context.get("correction_count", 0) + 1
                 if context["correction_count"] > 2:
                     raise ValueError("La verificación agotó el límite de correcciones")
@@ -410,6 +439,11 @@ class ConversationEngine:
             self._event(attempt, "verify", evidence=evidence)
             return "preparing_final_diff"
         if stage == "preparing_final_diff":
+            current_code = _hash_files(attempt['base_sha'], {
+                p: (safe_target(root, p).read_bytes() if safe_target(root, p).exists() else None)
+                for p in context['changed_code_paths']})
+            if current_code != context.get('verified_code_hash') or context['plan_hash'] != self._current_plan_hash(root, attempt):
+                raise ValueError('El candidato o plan cambió después de verify')
             prearchive_files = snapshot_changes(root, attempt["base_sha"], self._allows)
             context["prearchive_checkpoint_id"] = self.store.save_checkpoint(
                 record["run_id"], attempt["attempt_id"], revision,
@@ -420,12 +454,19 @@ class ConversationEngine:
             files = snapshot_changes(root, attempt["base_sha"], self._allows)
             diff = _diff(root, attempt["base_sha"], files)
             context["candidate_hash"] = _hash_files(attempt["base_sha"], files)
+            context['verified_candidate_hash'] = context['candidate_hash']
+            context['publication_authorization'] = {'plan_hash': context['plan_hash'], 'base_sha': attempt['base_sha'],
+                'revision': revision, 'candidate_hash': context['candidate_hash']}
             context["diff_sha256"] = self.store.save_review_diff(record["run_id"], attempt["attempt_id"], revision, diff)
             attempt["changed_files"] = sorted(files)
-            self._event(attempt, "sync", files=sorted(files))
-            self._event(attempt, "archive", change_id=context["change_id"])
+            synced = {p: hashlib.sha256(c).hexdigest() for p, c in files.items() if p.startswith('openspec/specs/') and c is not None}
+            archived = {p: hashlib.sha256(c).hexdigest() for p, c in files.items() if p.startswith('openspec/changes/archive/') and c is not None}
+            if not archived:
+                raise ValueError('Archive no produjo artefactos archivados verificables')
+            self._event(attempt, 'sync', files=sorted(files), spec_hashes=synced)
+            self._event(attempt, 'archive', change_id=context['change_id'], archive_hashes=archived)
             self._event(attempt, "diff_ready", candidate_hash=context["candidate_hash"], diff_sha256=context["diff_sha256"])
-            return "awaiting_diff_review"
+            return 'publishing' if attempt.get('publication_mode', 'diff_review') == 'approved_plan' else 'awaiting_diff_review'
         if stage == "awaiting_diff_review":
             if action["kind"] == "cancel":
                 self._event(attempt, "cancel", actor=action["actor"])
@@ -441,9 +482,16 @@ class ConversationEngine:
             return "publishing"
         if stage == "publishing":
             files = snapshot_changes(root, attempt["base_sha"], self._allows)
-            approved = next((item for item in reversed(attempt["approvals"]) if item["kind"] == "diff" and item["revision"] == revision), None)
-            if not approved or approved["sha256"] != _hash_files(attempt["base_sha"], files):
-                raise ValueError("El candidato ya no coincide con el diff aprobado")
+            automatic = attempt.get('publication_mode', 'diff_review') == 'approved_plan'
+            approved = next((item for item in reversed(attempt['approvals']) if item['kind'] == ('plan' if automatic else 'diff') and item['revision'] == revision), None)
+            candidate_hash = _hash_files(attempt['base_sha'], files)
+            authorization = context.get('publication_authorization', {})
+            valid = approved and (approved['sha256'] == context.get('plan_hash') and authorization == {
+                'plan_hash': approved['sha256'], 'base_sha': attempt['base_sha'], 'revision': revision,
+                'candidate_hash': candidate_hash} and context.get('tests', {}).get('passed') is True
+                and context.get('verified_candidate_hash') == candidate_hash if automatic else approved['sha256'] == candidate_hash)
+            if not valid:
+                raise ValueError('El candidato ya no coincide con la autorización y verificación vigentes')
             remote_sha = github.base_sha(self.profile.base_branch)
             if remote_sha != attempt["base_sha"]:
                 attempt["base_sha"] = remote_sha
@@ -465,19 +513,25 @@ class ConversationEngine:
 
             url = github.create_feature_pr(
                 self.profile.repository, branch, self.profile.base_branch,
-                story.hu[:160], f"## HU\n{story.description}\n\nOpenSpec validado y diff aprobado en la App. Merge manual pendiente.",
+                story.hu[:160], f"## HU\n{story.description}\n\nOpenSpec y candidato verificados; publicación autorizada en la App. Merge manual pendiente.",
                 attempt["base_sha"], publish_files,
                 on_progress=publication_progress,
             )
             checks = github.pr_check_status(self.profile.repository, branch)
             attempt["publication"] = {**attempt["publication"], "stage": "pr_created", "branch": branch, "pr_url": url}
             attempt["result"] = {"pr_url": url, "branch": branch, "pr_checks": checks,
-                                 "changed_files": sorted(files), "candidate_hash": approved["sha256"]}
+                                 "changed_files": sorted(files), "candidate_hash": candidate_hash}
             record["result"] = attempt["result"]
             record["changed_files"] = sorted(files)
             self._event(attempt, "publication_complete", pr_url=url, checks=checks)
             return "complete"
         raise ValueError("Etapa conversacional no reconocida")
+
+    def _current_plan_hash(self, root, attempt):
+        context = attempt['context']
+        files = {p: safe_target(root, p).read_bytes() for p in context['plan_paths']}
+        files['__plan_metadata__.json'] = json.dumps(context['plan_metadata'], sort_keys=True, ensure_ascii=False).encode('utf-8')
+        return _hash_files(attempt['base_sha'], files)
 
     def _save_artifact(self, record: dict, attempt: dict, path: str, content: str, digest: str) -> None:
         artifact_id = hashlib.sha256(path.encode("utf-8")).hexdigest()[:24]

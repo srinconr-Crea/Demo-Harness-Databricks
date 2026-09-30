@@ -18,13 +18,16 @@ import uvicorn
 REPOSITORY = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY / "src" / "agents" / "harness"))
 
-from harness.conversation_webapp import create_conversation_app
 from harness.contracts import ClientProfile
 from harness.conversation import ConversationEngine
+from harness.conversation_webapp import create_conversation_app
 from harness.coordination import SqliteRunCoordinator
 from harness.openspec import OpenSpecCLI
+from harness.sandbox import verify_general_patch
+from harness.sandbox_job import SandboxJobRunner
 from harness.store import LocalRunStore
 from test_conversation import FakeGithub, FakeModels, git, make_engine
+from test_repository_workflow import repository_profile
 
 
 def create_fixture(data_dir: Path):
@@ -42,8 +45,27 @@ def create_fixture(data_dir: Path):
                                     lambda: github, lambda *_args: FakeModels(), OpenSpecCLI(), None)
     else:
         engine, github, _models, store, _coordinator, profile = make_engine(case)
+        profile = repository_profile()
+        (github.source / 'tests').mkdir()
+        (github.source / 'tests/test_value.py').write_text(
+            "from pathlib import Path\nimport os\ndef test_value():\n    assert (Path(__file__).parents[1] / 'src/value.py').read_text().strip() == 'VALUE = 2'\n    assert 'GITHUB_APP_PRIVATE_KEY' not in os.environ\n", encoding='utf-8')
+        (github.source / 'tests/test_config.py').write_text(
+            "import json, sqlite3, tomllib\nfrom pathlib import Path\ndef test_config():\n    root = Path(__file__).parents[1]\n    assert json.loads((root / 'config.json').read_text())['value'] == 2\n    assert tomllib.loads((root / 'settings.toml').read_text())['value'] == 2\n    assert sqlite3.connect(':memory:').execute((root / 'query.sql').read_text()).fetchone() == (2,)\n", encoding='utf-8')
+        git('add', '.', cwd=github.source)
+        git('commit', '-m', 'functional synthetic tests', cwd=github.source)
+        github.sha = git('rev-parse', 'HEAD', cwd=github.source)
         profile_file.write_text(profile.model_dump_json(), encoding="utf-8")
+    engine.profile = profile
+    if sys.platform == 'win32':
+        # Browser fixtures run under a long workspace path; production uses UC.
+        store.directory = Path('\\\\?\\' + str(store.directory.resolve()))
+    engine.publication_mode = 'approved_plan'
     engine.cli = OpenSpecCLI()
+    import nbformat
+    extra_files = {'config/app.yaml': 'value: 2\n', 'config.json': '{"value": 2}\n',
+        'settings.toml': 'value = 2\n', 'docs/result.md': '# Resultado\nSalida 2.\n',
+        'result.txt': 'Salida 2\n', 'query.sql': 'SELECT 2 AS value;\n',
+        'notebooks/value.ipynb': nbformat.writes(nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell('%sql\nSELECT 2')]))}
 
     class BrowserModels(FakeModels):
         def __init__(self, run_id, attempt_id):
@@ -51,13 +73,26 @@ def create_fixture(data_dir: Path):
             self.run_id, self.attempt_id = run_id, attempt_id
 
         def complete(self, role, prompt, **kwargs):
+            payload = json.loads(prompt)
+            if role == 'developer' and not payload.get('context_history'):
+                return type('Response', (), {'text': json.dumps({'context_request': {'op': 'read_file', 'path': 'src/value.py'}})})()
             response = super().complete(role, prompt, **kwargs)
             if role == "planner" and json.loads(prompt)["artifact"] == "proposal":
-                response.text = json.dumps({"content":
+                response.text = json.dumps({'summary': 'Cambiar VALUE a 2 y documentar/configurar la salida. Probar sintaxis, formatos y suite funcional; aprobar autoriza el PR automático.',
+                    'manifest': [{'op': 'modify', 'path': 'src/value.py'}, *[{'op': 'create', 'path': p} for p in extra_files]], "content":
                     "# Proposal\n\n## Why\nActualizar salida del cliente sintético.\n\n"
                     "## What Changes\n- Cambiar VALUE a 2.\n\n## Capabilities\n\n"
                     "### New Capabilities\n- `client-value`: salida comprobable.\n\n"
                     "### Modified Capabilities\n\n## Impact\nSolo src/value.py.\n"})
+            if role == 'planner' and json.loads(prompt)['artifact'] == 'specs':
+                value = json.loads(response.text)
+                value['content'] = value['content'].replace('## ADDED Requirements', '## Purpose\n\nDefinir la salida comprobable del cliente sintético y sus formatos asociados.\n\n## ADDED Requirements')
+                response.text = json.dumps(value)
+            if role == 'developer':
+                value = json.loads(response.text)
+                value['operations'][0]['expected_sha256'] = payload['context_history'][-1]['result']['sha256']
+                value['operations'].extend({'op': 'create', 'path': p, 'content': c} for p, c in extra_files.items())
+                response.text = json.dumps(value)
             call_id = uuid.uuid4().hex
             store.save_agent_call(self.run_id, call_id, {
                 "run_id": self.run_id, "attempt_id": self.attempt_id,
@@ -71,10 +106,23 @@ def create_fixture(data_dir: Path):
             return response
 
     engine.models_factory = lambda run_id, attempt_id: BrowserModels(run_id, attempt_id)
-    engine.test_runner = lambda root, *_args: {
-        "passed": (root / "src/value.py").read_bytes() == b"VALUE = 2\n",
-        "evidence": ["Comprobación determinista del cliente sintético: VALUE = 2"],
-    }
+    class LocalJob:
+        def run(self, root, **kwargs):
+            import hashlib
+            import importlib.util
+            script_path = REPOSITORY / 'src/agents/harness/app/sandbox_job_runner.py'
+            spec = importlib.util.spec_from_file_location('local_isolated_job', script_path)
+            script = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(script)
+            directory = data_dir / 'sandbox' / kwargs['run_id'] / kwargs['attempt_id'] / ('1-' + 'a' * 16)
+            directory.mkdir(parents=True, exist_ok=True)
+            package = SandboxJobRunner._archive(root, profile)
+            (directory / 'input.zip').write_bytes(package)
+            script._sandbox_path = lambda _value, name: directory / name
+            result = script.run('input', 'result', hashlib.sha256(package).hexdigest(), kwargs['test_paths'])
+            return {**result, 'job_run_id': 'local-synthetic'}
+    engine.test_runner = lambda root, current_profile, paths, record, attempt: verify_general_patch(
+        root, current_profile, paths, LocalJob(), run_id=record['run_id'], attempt_id=attempt['attempt_id'], revision=attempt['revision'])
     app = create_conversation_app(engine, profile)
 
     @app.middleware("http")

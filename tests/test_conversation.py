@@ -75,10 +75,11 @@ class FakeModels:
     def complete(self, role, prompt, **kwargs):
         self.calls.append((role, kwargs.get("stage")))
         if role == "explorer":
-            value = {"summary": "Se requiere una actualización pequeña", "questions": ["¿Qué salida espera?"]}
+            value = {"summary": "Se requiere una actualización pequeña", "questions": [] if json.loads(prompt).get('clarifications') else ["¿Qué salida espera?"]}
         elif role == "planner":
             artifact = json.loads(prompt)["artifact"]
-            value = {"content": {
+            value = {"summary": "Cambiar VALUE a 2; probar salida. La aprobación autoriza crear el PR automáticamente.",
+                     "manifest": [{'op': 'modify', 'path': 'src/value.py'}], "content": {
                 "proposal": "# Proposal\n\n## Why\nSe necesita salida nueva.\n\n## What Changes\nAñadir salida.\n",
                 "specs": "# Spec Delta\n\n## ADDED Requirements\n\n### Requirement: Salida\nEl sistema SHALL cambiar salida.\n\n#### Scenario: Correcto\n- **WHEN** se llama\n- **THEN** devuelve 2\n",
                 "design": "# Design\n\n## Context\nCódigo cliente.\n\n## Decisions\nCambiar función.\n",
@@ -121,6 +122,7 @@ def make_engine(tmp_path: Path):
     engine = ConversationEngine(profile, store, coordinator, lambda: github,
                                 lambda _run, _attempt: models, FakeCLI(),
                                 lambda _root, _profile, _paths, _record, _attempt: {"passed": True, "evidence": ["synthetic test passed"]})
+    engine.publication_mode = 'diff_review'  # Exercise the persisted historical modality in these tests.
     return engine, github, models, store, coordinator, profile
 
 

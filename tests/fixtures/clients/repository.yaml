@@ -1,0 +1,28 @@
+name: repository-example
+version: "1"
+repository: example/client
+base_branch: develop
+openspec_root: openspec
+repository_policy:
+  scope: repository
+  read_only_paths: [.github/, openspec/, AGENTS.md, governance/]
+  denied_paths: [private/]
+  max_searches: 10
+  max_reads: 20
+  max_context_bytes: 200000
+  max_file_bytes: 50000
+  max_rounds: 20
+  timeout_seconds: 30
+general_patch:
+  operations: [create, modify, delete]
+  extensions: [.py, .sql, .ipynb, .yml, .yaml, .json, .toml, .md, .txt]
+  max_files: 100
+  max_bytes: 5000000
+  test_adapters: [python_compile, pytest_sandbox, sql_lint, yaml_validate, json_validate, notebook_validate, databricks_bundle_validate, toml_validate, markdown_structure, text_validate]
+  test_paths: [tests]
+  bundle_target: sandbox
+  bundle_paths: [databricks.yml, resources/]
+  impact_rules:
+    - paths: [config/]
+      test_paths: [tests/test_config.py]
+      adapters: [pytest_sandbox]

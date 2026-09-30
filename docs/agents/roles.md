@@ -8,8 +8,8 @@ La App FastAPI coordina las llamadas mediante Databricks Foundation Model API. L
 | Planner | `propose` / `update` | Escribe proposal, specs, design y tasks siguiendo las instrucciones del esquema OpenSpec del cliente. Usa Sonnet 5. |
 | Desarrollador | `apply` | Propone operaciones de archivo tipadas o confirma la expresión de `silver_safe_ratio`. Solo el aplicador de la App escribe dentro de la política del perfil. |
 | Verificador OpenSpec | `verify` | Confronta specs, tareas, diff y evidencia de pruebas. Usa Sonnet 5. |
-| Verificador independiente | `verify` | Revisa el resultado con el modelo de revisión configurado, actualmente Haiku 4.5. |
+| Verificador independiente | `verify` | Haiku 4.5 revisa como asesor. Sus recomendaciones, rechazo o fallo se registran sin bloquear ni consumir correcciones. |
 
-OpenSpec se prepara una sola vez por cliente en un PR separado. Cada HU clona el repositorio preparado, espera aprobación del plan, aplica código, ejecuta las pruebas configuradas y solicita aprobación del diff final antes de crear un PR. El PR y su merge se revisan en GitHub por una persona. La HU y la salida de modelos son datos no confiables y no amplían rutas, modelos, permisos ni validadores.
+OpenSpec se prepara una sola vez por cliente en un PR separado. Cada HU nueva clona el repositorio preparado y espera aprobación del plan, manifiesto y pruebas previstas; después aplica, verifica con Sonnet/pruebas obligatorios, sincroniza, archiva y crea automáticamente el PR. El diff queda consultable; el PR y su merge se revisan en GitHub por una persona. Los históricos conservan su aprobación original. La HU y las salidas de modelos no amplían permisos. Véase [contratos y presupuestos](../repository-workflow.md) para las solicitudes tipadas de contexto y operaciones por estrategia.
 
 Cada invocación guarda `run_id`, `attempt_id`, `call_id`, rol, etapa, revisión, modelo, tiempos, tokens, estado y costo estimado si hubo `usage`. Un fallo o una respuesta sin `usage` conserva el costo ausente. Los JSON históricos siguen legibles.
