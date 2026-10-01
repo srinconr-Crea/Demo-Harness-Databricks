@@ -11,6 +11,7 @@ from harness.coordination import SqliteRunCoordinator
 from harness.conversation import ConversationEngine
 from harness.store import LocalRunStore
 from test_notebook_edit import fixture_notebook
+from openspec_helpers import write_skills
 
 
 def git(*args, cwd=None):
@@ -47,11 +48,27 @@ class FakeGithub:
 
 
 class FakeCLI:
+    def version(self):
+        return '1.13.2'
+
+    def inventory(self, root):
+        return {'root': {'path': str(root)}, 'specs': []}
+
+    def status(self, root, name):
+        return {'schemaName': 'spec-driven', 'changeRoot': str(root / 'openspec' / 'changes' / name),
+                'artifacts': [{'id': a, 'status': 'ready'} for a in ['proposal', 'specs', 'design', 'tasks']]}
+
     def new_change(self, root, name):
         (root / "openspec" / "changes" / name).mkdir(parents=True)
 
     def instructions(self, root, artifact, name):
-        suffix = {"proposal": "proposal.md", "design": "design.md", "tasks": "tasks.md"}.get(artifact, "specs")
+        if artifact == 'archive':
+            return {'root': {'path': str(root)}, 'context': 'Client', 'operationGuidance': []}
+        if artifact == 'apply':
+            change = root / 'openspec' / 'changes' / name
+            return {'schemaName': 'spec-driven', 'changeDir': str(change), 'state': 'ready',
+                    'instruction': 'Apply approved tasks', 'contextFiles': {'tasks': [str(change / 'tasks.md')]}}
+        suffix = {"proposal": "proposal.md", "design": "design.md", "tasks": "tasks.md"}.get(artifact, "specs/**/*.md")
         return {"schemaName": "spec-driven", "changeDir": str(root / "openspec" / "changes" / name),
                 "resolvedOutputPath": str(root / "openspec" / "changes" / name / suffix),
                 "instruction": "write", "template": "", "context": "", "rules": []}
@@ -71,9 +88,11 @@ class FakeCLI:
 class FakeModels:
     def __init__(self):
         self.calls = []
+        self.prompts = []
 
     def complete(self, role, prompt, **kwargs):
         self.calls.append((role, kwargs.get("stage")))
+        self.prompts.append((role, json.loads(prompt), kwargs))
         if role == "explorer":
             value = {"summary": "Se requiere una actualización pequeña", "questions": [] if json.loads(prompt).get('clarifications') else ["¿Qué salida espera?"]}
         elif role == "planner":
@@ -107,6 +126,7 @@ def make_engine(tmp_path: Path):
     (source / "openspec" / "config.yaml").write_text("schema: spec-driven\ncontext: Cliente preparado\n", encoding="utf-8")
     (source / "openspec" / "specs" / ".gitkeep").write_text("", encoding="utf-8")
     (source / "openspec" / "changes" / ".gitkeep").write_text("", encoding="utf-8")
+    write_skills(source)
     git("add", ".", cwd=source)
     git("commit", "-m", "base", cwd=source)
     sha = git("rev-parse", "HEAD", cwd=source)

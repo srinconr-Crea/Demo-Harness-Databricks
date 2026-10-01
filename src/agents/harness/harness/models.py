@@ -65,6 +65,7 @@ class ModelResponse:
     stage: str | None = None
     revision: int | None = None
     approved_sha256: str | None = None
+    instruction_provenance: dict | None = None
 
 
 _PRIVATE_KEY = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.DOTALL)
@@ -103,7 +104,7 @@ class ModelClient:
         self.max_tokens = max_tokens
         self.advisory_api = None
 
-    def complete(self, role: str, prompt: str, *, call_id: str | None = None, usage_context: dict[str, str] | None = None, max_tokens: int | None = None, system_prompt: str | None = None, stage: str | None = None, revision: int | None = None, approved_sha256: str | None = None) -> ModelResponse:
+    def complete(self, role: str, prompt: str, *, call_id: str | None = None, usage_context: dict[str, str] | None = None, max_tokens: int | None = None, system_prompt: str | None = None, stage: str | None = None, revision: int | None = None, approved_sha256: str | None = None, instruction_provenance: dict | None = None) -> ModelResponse:
         model = self.routing[role]
         call_id = call_id or uuid.uuid4().hex
         body = {
@@ -128,6 +129,7 @@ class ModelClient:
             "stage": stage,
             "revision": revision,
             "approved_sha256": approved_sha256,
+            "instruction_provenance": instruction_provenance,
         }
         try:
             api = self.advisory_api if role == 'verifier' and self.advisory_api is not None else self.api

@@ -5,7 +5,8 @@ import pytest
 import json
 
 from harness.contracts import ClientProfile, RatioSpec, Story, StoryRequest
-from harness.openspec import OpenSpecCLI, prepare_client_workspace, initialize_client_workspace, onboard_client, propose_client_change
+from openspec_helpers import prepare_manual, write_skills
+from harness.openspec import OpenSpecCLI, prepare_client_workspace, propose_client_change
 
 
 def profile():
@@ -25,7 +26,7 @@ def test_client_workspace_requires_existing_openspec_before_planning(tmp_path: P
         prepare_client_workspace(root, profile())
     assert not (root / "openspec").exists()
 
-    initialize_client_workspace(root, profile(), cli)
+    prepare_manual(root, profile(), cli)
     prepare_client_workspace(root, profile())
 
     config = (root / "openspec" / "config.yaml").read_text(encoding="utf-8")
@@ -53,6 +54,7 @@ def test_client_workspace_preserves_existing_config_and_specs(tmp_path: Path):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
     (root / "openspec" / "changes").mkdir()
+    write_skills(root)
     prepare_client_workspace(root, profile())
 
     assert (root / "openspec" / "config.yaml").read_text(encoding="utf-8") == existing["openspec/config.yaml"][0]
@@ -66,45 +68,23 @@ def test_client_workspace_never_calls_init_for_existing_base(tmp_path: Path):
     (root / "openspec" / "changes").mkdir()
     (root / "openspec" / "config.yaml").write_text("schema: spec-driven\ncontext: Approved\n", encoding="utf-8")
 
+    write_skills(root)
+
     class NoInit:
+        def version(self):
+            return "1.13.2"
+
         def initialize(self, _root):
             raise AssertionError("init no debe ejecutarse para una HU")
 
     prepare_client_workspace(root, profile(), {}, NoInit())
 
 
-def test_onboarding_pr_contains_only_openspec_files(tmp_path: Path):
-    class FakeGitHub:
-        def __init__(self):
-            self.published = None
-
-        def base_sha(self, branch):
-            assert branch == "develop"
-            return "a" * 40
-
-        def checkout(self, destination, base_sha):
-            assert base_sha == "a" * 40
-            destination.mkdir()
-            (destination / "source.py").write_text("print(1)\n", encoding="utf-8")
-
-        def create_feature_pr(self, repository, branch, base_branch, title, body, base_sha, files):
-            self.published = files
-            assert branch.startswith("feature/")
-            assert repository == "example/client" and base_branch == "develop"
-            return "https://github.com/example/client/pull/1"
-
-    github = FakeGitHub()
-    url = onboard_client(profile(), github, OpenSpecCLI())
-    assert url.endswith("/pull/1")
-    assert github.published and all(path.startswith("openspec/") for path in github.published)
-    assert "source.py" not in github.published
-
-
 def test_generic_proposal_can_be_updated_and_strictly_validated(tmp_path: Path):
     root = tmp_path / "client"
     root.mkdir()
     cli = OpenSpecCLI()
-    initialize_client_workspace(root, profile(), cli)
+    prepare_manual(root, profile(), cli)
 
     class Model:
         def complete(self, role, prompt, **kwargs):
@@ -137,7 +117,7 @@ def test_openspec_cli_fails_closed_when_missing(tmp_path: Path):
     root = tmp_path / "client"
     root.mkdir()
     with pytest.raises(ValueError, match="OpenSpec"):
-        OpenSpecCLI(app_root=tmp_path).initialize(root)
+        OpenSpecCLI(app_root=tmp_path).inventory(root)
 
 
 def test_openspec_cli_timeout_is_failure(tmp_path: Path, monkeypatch):
@@ -155,7 +135,7 @@ def test_openspec_cli_timeout_is_failure(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", timeout)
     with pytest.raises(TimeoutError, match="OpenSpec"):
-        OpenSpecCLI(app_root=app_root, timeout_seconds=1).initialize(root)
+        OpenSpecCLI(app_root=app_root, timeout_seconds=1).inventory(root)
 
 
 def story():
@@ -196,7 +176,7 @@ def test_planner_creates_and_validates_client_change(tmp_path: Path):
     root = tmp_path / "client"
     root.mkdir()
     cli = OpenSpecCLI()
-    initialize_client_workspace(root, profile(), cli)
+    prepare_manual(root, profile(), cli)
     spec = RatioSpec(output_column="ratio", numerator="num", denominator="den")
     models = FakePlanner(spec.expression)
 
@@ -214,7 +194,7 @@ def test_planner_rejects_manifest_outside_profile_before_developer(tmp_path: Pat
     root = tmp_path / "client"
     root.mkdir()
     cli = OpenSpecCLI()
-    initialize_client_workspace(root, profile(), cli)
+    prepare_manual(root, profile(), cli)
     spec = RatioSpec(output_column="ratio", numerator="num", denominator="den")
     with pytest.raises(ValueError, match="política"):
         plan_client_change(cli, root, "hu-001-attempt-2", story(), profile(), spec, "source", FakePlanner(spec.expression, wrong_path=True))
@@ -227,7 +207,7 @@ def test_client_change_archives_and_collects_publishable_files(tmp_path: Path):
     root.mkdir()
     cli = OpenSpecCLI()
     client = profile()
-    initialize_client_workspace(root, client, cli)
+    prepare_manual(root, client, cli)
     spec = RatioSpec(output_column="ratio", numerator="num", denominator="den")
     plan_client_change(cli, root, "hu-001-attempt-3", story(), client, spec, "source", FakePlanner(spec.expression))
 
@@ -248,7 +228,7 @@ def test_archived_change_preserves_existing_client_config(tmp_path: Path):
     root.mkdir()
     cli = OpenSpecCLI()
     existing = {"openspec/config.yaml": ("schema: spec-driven\ncontext: Client context\n", "existing-sha")}
-    initialize_client_workspace(root, profile(), cli)
+    prepare_manual(root, profile(), cli)
     (root / "openspec" / "config.yaml").write_text(existing["openspec/config.yaml"][0], encoding="utf-8")
     spec = RatioSpec(output_column="ratio", numerator="num", denominator="den")
     plan_client_change(cli, root, "hu-001-existing", story(), profile(), spec, "source", FakePlanner(spec.expression))

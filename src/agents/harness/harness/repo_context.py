@@ -117,6 +117,7 @@ def contextual_answer(
     models, role, prompt: dict, context: RepoContext | None = None, **kwargs
 ):
     payload = dict(prompt)
+    max_prompt_bytes = kwargs.pop('max_prompt_bytes', None)
     if context:
         payload["context_tools"] = ["list_tree", "search_text", "read_file"]
         payload["context_contract"] = (
@@ -125,9 +126,12 @@ def contextual_answer(
     limit = context.policy.max_rounds if context else 1
     history = []
     for _ in range(limit):
+        serialized = json.dumps({**payload, "context_history": history}, ensure_ascii=False)
+        if max_prompt_bytes and len(serialized.encode('utf-8')) > max_prompt_bytes:
+            raise ValueError('El prompt OpenSpec excede el presupuesto; no se truncaron instrucciones')
         response = models.complete(
             role,
-            json.dumps({**payload, "context_history": history}, ensure_ascii=False),
+            serialized,
             **kwargs,
         )
         body = response.text.strip()

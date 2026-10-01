@@ -24,6 +24,8 @@ from .openspec import (
 )
 from .patch import FileOperation, apply_file_operations
 from .repo_context import ContextResponseError, RepoContext, contextual_answer
+from .skills import SkillCatalog
+from .openspec import instruction_context, exploration_context
 from .repository_policy import safe_target
 from .strategies import get_editor
 
@@ -125,6 +127,7 @@ class ConversationEngine:
         attempt = RunAttempt(
             attempt_id=attempt_id, state="queued", stage="exploring",
             publication_mode=self.publication_mode,
+            context={'instruction_engine': 'client-skills-v1'},
             queued_at=timestamp, messages=[{"kind": "story", "actor": actor, "text": story.description, "at": timestamp}],
         )
         record = RunContract(
@@ -158,6 +161,23 @@ class ConversationEngine:
         from .progress import checklist
         record['checklist'] = checklist(record['attempts'][-1])
         return record
+
+    def retry_legacy(self, run_id: str):
+        record = self.get(run_id)
+        old = record['attempts'][-1]
+        if old.get('context', {}).get('instruction_engine') == 'client-skills-v1':
+            return
+        if old.get('publication', {}).get('pr_url'):
+            raise ValueError('El intento ya tiene un PR; revisar publicación existente')
+        identifier = uuid.uuid4().hex
+        attempt = RunAttempt(attempt_id=identifier, state='queued', stage='exploring',
+            publication_mode=old.get('publication_mode', 'diff_review'), queued_at=_now(),
+            context={'instruction_engine': 'client-skills-v1', 'previous_attempt_id': old['attempt_id']},
+            messages=list(old.get('messages', [])[:1])).model_dump(mode='json')
+        record['attempts'].append(attempt)
+        record['attempt_id'], record['state'] = identifier, 'queued'
+        self.coordinator.create(run_id, identifier, 'exploring')
+        self._save(record)
 
     @staticmethod
     def _state(stage: str) -> str:
@@ -225,13 +245,16 @@ class ConversationEngine:
                 raise ValueError("El intento ya está siendo procesado")
             previous_checkpoint = row.get("checkpoint_id")
             try:
+                cancelling = action and action['kind'] == 'cancel'
+                if not cancelling and attempt.get('context', {}).get('instruction_engine') != 'client-skills-v1':
+                    raise ValueError('Intento histórico sin procedencia: requiere reintento explícito con cliente preparado')
                 github = self.github_factory()
                 models = self.models_factory(run_id, attempt["attempt_id"])
                 with tempfile.TemporaryDirectory(prefix="harness-client-run-") as directory:
                     root = Path(directory) / "client"
                     base_sha = attempt.get("base_sha") or github.base_sha(self.profile.base_branch)
                     github.checkout(root, base_sha)
-                    prepare_client_workspace(root, self.profile)
+                    catalog = None if cancelling else prepare_client_workspace(root, self.profile, cli=self.cli)
                     restore_id = (
                         attempt.get("context", {}).get("prearchive_checkpoint_id")
                         if stage == "updating" and attempt.get("context", {}).get("restore_prearchive")
@@ -240,6 +263,12 @@ class ConversationEngine:
                     if restore_id:
                         checkpoint = self.store.load_checkpoint(run_id, attempt["attempt_id"], restore_id)
                         restore_checkpoint(root, checkpoint, base_sha, self._allows)
+                    if catalog:
+                        identity = SkillCatalog(root, self.profile, self.cli.version()).identity()
+                        previous = attempt['context'].get('instruction_catalog')
+                        if previous and previous != identity:
+                            raise ValueError('Las skills o el runtime cambiaron; requiere reintento explícito')
+                        attempt['context']['instruction_catalog'] = identity
                     if restore_id != previous_checkpoint:
                         attempt["context"].pop("restore_prearchive", None)
                         attempt["context"].pop("candidate_hash", None)
@@ -299,12 +328,25 @@ class ConversationEngine:
         story = StoryRequest.model_validate(record["story"])
         context = attempt.setdefault("context", {})
         revision = attempt["revision"]
+        if action and action['kind'] == 'cancel':
+            self._event(attempt, 'cancel', actor=action['actor'])
+            return 'cancelled'
+        catalog = SkillCatalog(root, self.profile, self.cli.version())
+        snapshot = lambda value: self.store.save_instruction_snapshot(record['run_id'], attempt['attempt_id'], value)
+
+        def answer(role, phase, prompt, *, instructions=None, repo_context=None, approved_hash=None):
+            payload, extras = catalog.compose(phase, prompt, instructions=instructions,
+                base_sha=attempt['base_sha'], on_snapshot=snapshot)
+            provenance = extras['instruction_provenance']
+            self._event(attempt, 'instructions', **provenance)
+            return contextual_answer(models, role, payload, repo_context, stage=stage,
+                revision=revision, approved_sha256=approved_hash, **extras)
         if stage == "exploring":
-            result = _json_answer(models, "explorer", {
+            result = answer("explorer", 'explore', {
                 "task": "Explorar la HU, resumirla y preguntar solo lo necesario. JSON: summary, questions[]",
                 "story": story.model_dump(), "source_summary": _source_summary(root, self.profile),
                 "clarifications": context.get('clarifications', []),
-            }, stage=stage, revision=revision, repo_context=RepoContext(root, self.profile))
+            }, instructions=exploration_context(self.cli, root, self.profile), repo_context=RepoContext(root, self.profile))
             questions = result.get("questions")
             if not isinstance(result.get("summary"), str) or not isinstance(questions, list) or any(not isinstance(question, str) for question in questions) or len(questions) > 5:
                 raise ValueError("Explore devolvió un contrato inválido")
@@ -337,10 +379,12 @@ class ConversationEngine:
                 feedback=feedback,
                 revision=revision + 1,
                 profile=self.profile,
+                skill_catalog=catalog, base_sha=attempt['base_sha'], on_snapshot=snapshot,
                 on_artifact=lambda path, content, digest: self._save_artifact(record, attempt, path, content, digest),
             )
             attempt["revision"] += 1
             context['plan_metadata'] = plan.metadata
+            context['plan_metadata']['instruction_catalog'] = context['instruction_catalog']
             context['plan_paths'] = sorted(plan.artifacts)
             context["plan_hash"] = self._current_plan_hash(root, attempt)
             context.pop("candidate_hash", None)
@@ -365,16 +409,17 @@ class ConversationEngine:
             if context['plan_hash'] != self._current_plan_hash(root, attempt):
                 raise ValueError('Los bytes del plan ya no coinciden con la aprobación')
             change_root = root / "openspec" / "changes" / context["change_id"]
+            apply_context = instruction_context(self.cli, root, context['change_id'], 'apply', self.profile)
             artifacts = {path.relative_to(change_root).as_posix(): path.read_text(encoding='utf-8')
                          for path in change_root.rglob('*.md')}
             if self.profile.general_patch:
-                proposal = _json_answer(models, "developer", {
+                proposal = answer("developer", 'apply', {
                     "task": "Aplicar las tareas aprobadas. Responder JSON operations[] con op/path/content/expected_sha256 y notes.",
                     "story": story.model_dump(), "artifacts": artifacts,
                     "source_summary": _source_summary(root, self.profile),
                     "allowed_paths": self.profile.general_patch.allowed_paths,
                     'approved_manifest': context['plan_metadata']['manifest'],
-                }, stage=stage, revision=revision, approved_hash=approved["sha256"], repo_context=RepoContext(root, self.profile))
+                }, instructions=apply_context, approved_hash=approved["sha256"], repo_context=RepoContext(root, self.profile))
                 raw = proposal.get("operations")
                 if not isinstance(raw, list):
                     raise ValueError("El desarrollador no devolvió operaciones tipadas")
@@ -386,7 +431,7 @@ class ConversationEngine:
                     return 'updating'
                 paths = apply_file_operations(root, self.profile, operations)
             else:
-                paths = self._apply_ratio(root, story, models, attempt, approved)
+                paths = self._apply_ratio(root, story, models, attempt, approved, answer, apply_context)
             context["changed_code_paths"] = paths
             self._event(attempt, "apply", paths=paths)
             return "verifying"
@@ -409,11 +454,11 @@ class ConversationEngine:
             spec_root = root / "openspec" / "changes" / context["change_id"] / "specs"
             specs = {path.relative_to(spec_root).as_posix(): path.read_text(encoding='utf-8')
                      for path in spec_root.rglob('*.md')}
-            check = _json_answer(models, "openspec_verifier", {
+            check = answer("openspec_verifier", 'verify', {
                 "task": "Contrastar especificaciones, tareas, pruebas y diff. JSON approved, findings[]",
                 "story": story.model_dump(), "specs": specs, "tasks": plan,
                 "test_evidence": evidence, "diff": diff,
-            }, stage=stage, revision=revision, approved_hash=context["plan_hash"])
+            }, instructions=self.cli.status(root, context['change_id']), approved_hash=context["plan_hash"])
             try:
                 independent = _json_answer(models, 'verifier', {
                     'task': 'Revisión asesora independiente. JSON approved, findings[]. Nunca decide la publicación.',
@@ -450,6 +495,11 @@ class ConversationEngine:
                 attempt["base_sha"], prearchive_files, metadata={"attempt": attempt},
             )
             mark_tasks_complete(root, context["change_id"])
+            archive_context = instruction_context(self.cli, root, context['change_id'], 'archive', self.profile)
+            for phase in ('sync', 'archive'):
+                _payload, extras = catalog.compose(phase, {'execution': 'deterministic_archive'},
+                    instructions=archive_context, base_sha=attempt['base_sha'], on_snapshot=snapshot)
+                self._event(attempt, 'instructions', **extras['instruction_provenance'])
             self.cli.archive(root, context["change_id"])
             files = snapshot_changes(root, attempt["base_sha"], self._allows)
             diff = _diff(root, attempt["base_sha"], files)
@@ -497,7 +547,7 @@ class ConversationEngine:
                 attempt["base_sha"] = remote_sha
                 attempt["revision"] += 1
                 attempt["openspec"] = {}
-                attempt["context"] = {}
+                attempt["context"] = {'instruction_engine': 'client-skills-v1'}
                 self._event(attempt, "base_advanced", new_base_sha=remote_sha)
                 return "exploring"
             branch = f"feature/{re.sub(r'[^a-z0-9-]+', '-', story.hu.lower()).strip('-')[:60]}-{attempt['attempt_id'][:8]}"
@@ -545,7 +595,7 @@ class ConversationEngine:
         record["updated_at"] = _now()
         self._save(record)
 
-    def _apply_ratio(self, root: Path, request: StoryRequest, models, attempt: dict, approved: dict) -> list[str]:
+    def _apply_ratio(self, root: Path, request: StoryRequest, models, attempt: dict, approved: dict, answer, apply_context) -> list[str]:
         story = Story(
             id=request.hu[:64], title=request.hu[:160], architecture=request.description,
             source_target=request.description, business_rules=request.description,
@@ -557,11 +607,11 @@ class ConversationEngine:
         path = self.profile.strategy.notebook
         target = root / path
         original = target.read_text(encoding="utf-8")
-        proposal = _json_answer(models, "developer", {
+        proposal = answer("developer", 'apply', {
             "task": "Confirmar la expresión del plan aprobado para la razón Silver.",
             "story": request.model_dump(), "expected_expression": spec.expression,
             "source_excerpt": editor.source(original, self.profile)[:12000],
-        }, stage="applying", revision=attempt["revision"], approved_hash=approved["sha256"])
+        }, instructions=apply_context, approved_hash=approved["sha256"])
         if proposal.get("expression") != spec.expression:
             raise ValueError("El desarrollador propuso otra expresión")
         updated = editor.edit(original, self.profile, spec)

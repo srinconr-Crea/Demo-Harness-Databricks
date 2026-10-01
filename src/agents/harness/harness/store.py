@@ -22,6 +22,24 @@ def _checkpoint_path(path: str) -> None:
 
 
 class _CheckpointStore:
+    def save_instruction_snapshot(self, run_id, attempt_id, snapshot):
+        _safe_key(run_id, attempt_id)
+        data = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+        if len(data) > 2_097_152:
+            raise ValueError('Snapshot de instrucciones excedido')
+        digest = hashlib.sha256(data).hexdigest()
+        self._write_checkpoint_file(f'instructions/{run_id}/{attempt_id}/{digest}.json', data)
+        return digest
+
+    def load_instruction_snapshot(self, run_id, attempt_id, digest):
+        _safe_key(run_id, attempt_id, digest)
+        if re.fullmatch(r'[a-f0-9]{64}', digest) is None:
+            raise ValueError('Referencia de instrucciones inválida')
+        data = self._read_checkpoint_file(f'instructions/{run_id}/{attempt_id}/{digest}.json')
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise ValueError('Falló integridad de instrucciones')
+        return json.loads(data)
+
     def _write_checkpoint_file(self, relative: str, contents: bytes) -> None:
         raise NotImplementedError
 

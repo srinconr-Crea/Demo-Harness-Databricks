@@ -1,5 +1,7 @@
 # Roles de la conversación OpenSpec
 
+Las skills se generan manualmente en el repositorio cliente con `init --tools agents`, se revisan por PR y se integran antes de usar la App. Cada rol recibe su skill versionada y un contrato JSON mediado por el Harness; los workflows e instrucciones CLI se combinan según [el mapa de fases](../repository-workflow.md). allowed-tools no habilita herramientas y las skills no seleccionan modelos ni aprobaciones. Se registra procedencia por llamada, incluida cada ronda contextual y fallos; sync/archive conservan ejecución determinista y eventos sin costos ficticios.
+
 La App FastAPI coordina las llamadas mediante Databricks Foundation Model API. Los roles comparten la identidad de la App; el Job de pruebas usa una identidad de servicio separada. El enrutamiento está en `src/agents/harness/config/defaults/models.yaml` y los límites de texto en `src/agents/harness/config/defaults/agents.yaml`.
 
 | Rol | Momento | Responsabilidad |

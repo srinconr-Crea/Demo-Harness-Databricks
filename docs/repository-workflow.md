@@ -16,6 +16,18 @@ general_patch conserva create/modify/delete y extensiones explícitas `.py`, `.s
 
 ## Contexto y contratos
 
+`conversation.py` conserva fases, modelos y permisos. `skills.py` lee las skills del SHA base cliente, completas y solo lectura; no mantiene una copia en la App. `openspec.py` consulta instrucciones CLI y valida raíces, archivos y dependencias. Cada prompt combina skill, contrato JSON, HU y contexto autorizado. Las llamadas conservan ruta/hash de la skill, versión CLI y hash/snapshot de instrucciones; la aprobación del plan incluye catálogo y runtime.
+
+| Fase | Skill consumida | Resultado/control |
+| --- | --- | --- |
+| explore | openspec-explore | summary y questions; inventario de specs |
+| propose/update | openspec-propose / openspec-update-change | cuatro artefactos y dependencias CLI; revisión del manifiesto |
+| apply | openspec-apply-change | instructions apply; operations o expression |
+| verify | openspec-verify-change | Sonnet obligatorio y evidencia de pruebas |
+| sync/archive | openspec-sync-specs / openspec-archive-change | preflight y archive deterministas, una sola sincronización |
+
+Los workflows no son subcomandos CLI homónimos. allowed-tools, referencias y texto de una skill no conceden shell, edición directa, modelos ni aprobaciones adicionales. El procedimiento manual para seleccionar los siete workflows e integrar el PR está en operación. Una skill faltante/incompatible bloquea antes de llamadas; las actualizaciones ocurren fuera de las HUs. Los snapshots protegidos conservan instrucciones completas aunque los logs estén truncados.
+
 RepoContext ofrece list_tree, search_text y read_file mediante solicitudes JSON tipadas; no ofrece shell ni ejecución. Las lecturas incluyen SHA-256 y truncamiento explícito. Presupuestos iniciales configurables: 10 búsquedas, 20 lecturas, 200 KB totales, 50 KB por archivo, 20 rondas y 30 segundos para consultas de cada etapa. Cada ronda del modelo se registra con tokens y costo si el endpoint informa usage. Nunca se presume contenido leído cuando se agota el presupuesto.
 
 developer recibe todos los specs delta, tareas y manifiesto de la revisión aprobada. Para general_patch devuelve operations con op/path/content/expected_sha256 y notes; para ratio conserva expression exacta. El contenido de los archivos y de la HU no amplía permisos, modelos ni pruebas.

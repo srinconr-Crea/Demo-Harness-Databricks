@@ -38,8 +38,10 @@ def create_conversation_app(engine, profile) -> FastAPI:
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="harness-conversation")
     error_lock = Lock()
 
-    def background(run_id: str, action: dict | None = None) -> None:
+    def background(run_id: str, action: dict | None = None, retry_legacy: bool = False) -> None:
         try:
+            if retry_legacy:
+                engine.retry_legacy(run_id)
             if action:
                 engine.act(run_id, action["action"], actor=action["actor"],
                            expected_revision=action["expected_revision"],
@@ -204,11 +206,12 @@ def create_conversation_app(engine, profile) -> FastAPI:
         record, _actor = authorized_run(run_id, request)
         attempt = record["attempts"][-1]
         timeline = attempt.get("timeline") or []
-        if (record["state"] not in {"queued", "running"}
+        legacy = attempt.get('context', {}).get('instruction_engine') != 'client-skills-v1'
+        if (record["state"] not in {"queued", "running", "awaiting_plan_review", "awaiting_clarification", "awaiting_diff_review"}
                 or attempt["revision"] != payload.expected_revision
-                or not timeline or timeline[-1]["kind"] != "error"):
+                or (not legacy and (record['state'] not in {'queued', 'running'} or not timeline or timeline[-1]['kind'] != 'error'))):
             raise HTTPException(status_code=409, detail="No hay una etapa fallida vigente para reintentar")
-        executor.submit(background, run_id)
+        executor.submit(background, run_id, retry_legacy=legacy)
         return {"run_id": run_id, "state": "retry_queued"}
 
     return app

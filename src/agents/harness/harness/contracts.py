@@ -271,6 +271,7 @@ class AgentCallContract(BaseModel):
     stage: RunStage | None = None
     revision: int | None = Field(default=None, ge=0)
     approved_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    instruction_provenance: dict | None = None
     model: str
     status: Literal["complete", "failed"] = "complete"
     input_text: str | None = None
@@ -334,6 +335,13 @@ def parse_agent_output(role: str, response: str) -> dict:
         raise ValueError(f"Salida no válida del rol {role}") from error
 
 
+class OpenSpecSkillPolicy(BaseModel):
+    compatible_versions: list[str] = Field(default_factory=lambda: ['1.13.2'], min_length=1)
+    max_skill_bytes: int = Field(default=131072, ge=1024, le=262144)
+    max_catalog_bytes: int = Field(default=1048576, ge=1024, le=2097152)
+    max_prompt_bytes: int = Field(default=524288, ge=1024, le=2097152)
+
+
 class ClientProfile(BaseModel):
     name: str = "default"
     version: str = "1"
@@ -341,6 +349,7 @@ class ClientProfile(BaseModel):
     base_branch: str
     allowed_paths: list[str] = Field(default_factory=list)
     repository_policy: RepositoryPolicy = Field(default_factory=RepositoryPolicy)
+    openspec_skills: OpenSpecSkillPolicy = Field(default_factory=OpenSpecSkillPolicy)
     openspec_root: Literal["openspec"]
     strategy: SafeRatioStrategy | None = None
     general_patch: GeneralPatchPolicy | None = None
@@ -364,7 +373,7 @@ class ClientProfile(BaseModel):
         from .repository_policy import denied, matches
         policy = self.repository_policy
         if denied(path, policy.denied_paths) or any(matches(path, p) for p in [
-            '.github', self.openspec_root, 'AGENTS.md', *policy.read_only_paths]):
+            '.github', '.agents', self.openspec_root, 'AGENTS.md', *policy.read_only_paths]):
             return False
         return policy.scope == 'repository' or any(matches(path, p) for p in self.allowed_paths)
 

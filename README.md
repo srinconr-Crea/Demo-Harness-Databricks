@@ -9,7 +9,7 @@ cliente requieren revisión humana.
 
 ## Flujo de una HU
 
-La App recibe **HU** y **descripción**. Una operación de incorporación separada clona el repositorio cliente, inicializa OpenSpec una sola vez y abre un PR de preparación. Una persona debe integrar ese PR antes de enviar HUs. Cada HU posterior clona el SHA base completo en un workspace local temporal y verifica que OpenSpec ya esté versionado.
+La App recibe **HU** y **descripción** después de la preparación manual del cliente: una persona ejecuta `openspec init --tools agents --no-animation`, configura contexto y los siete workflows requeridos, crea el PR e integra sus cambios. La App no inicializa ni actualiza OpenSpec ni crea PR de preparación. Cada HU clona el SHA base y consume sus skills versionadas; véase el procedimiento en `docs/operacion.md`.
 
 El explorador aclara la HU y el planner presenta la propuesta, manifiesto y pruebas previstas para aprobación o cambios. Para ejecuciones nuevas, aprobar el plan autoriza aplicar, verificar, sincronizar, archivar y crear el PR automáticamente. Sonnet y las pruebas son obligatorios; Haiku es asesor. El diff real queda consultable y el merge y despliegue siguen siendo humanos. Los históricos conservan su modalidad original de aprobación. Véase [desarrollo general y publicación automática](docs/repository-workflow.md) para permisos, adaptadores y recuperación.
 

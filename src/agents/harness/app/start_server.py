@@ -83,6 +83,7 @@ def models_factory(run_id: str, attempt_id: str):
             story_id=story_id, role=role, model=response.model, status=response.status,
             stage=response.stage, revision=response.revision,
             approved_sha256=response.approved_sha256,
+            instruction_provenance=response.instruction_provenance,
             input_text=response.input_text, output_text=response.output_text,
             input_sha256=response.input_sha256, output_sha256=response.output_sha256,
             parsed_output=sanitize_log_value(parsed_output, RUNTIME["logging"]["max_text_chars"]),

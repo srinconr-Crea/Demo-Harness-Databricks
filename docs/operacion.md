@@ -52,7 +52,22 @@ OpenSpec de cada cliente y su merge humano siguen siendo pasos de incorporación
 
 ## Incorporación única de un cliente
 
-El perfil YAML fija repositorio, rama base, rutas editables, instalación de GitHub App y estrategia. OpenSpec vive en el repositorio cliente. Ejecutar `src/agents/harness/app/onboard_client.py` con el perfil configurado para clonar la base, correr `openspec init --tools none`, escribir `openspec/config.yaml` con contexto del cliente y abrir un PR `feature/openspec-setup-*` que contenga solo OpenSpec. Una persona integra ese PR en la rama base. La App rechaza toda HU cuyo SHA base no contenga `openspec/config.yaml` válido; cada HU posterior **no** vuelve a inicializar OpenSpec.
+El perfil YAML fija repositorio, rama base, rutas editables, instalación de GitHub App y estrategia. La preparación es exclusivamente humana, fuera de la App. En el checkout cliente, una persona usa la CLI compatible (actualmente 1.13.2), selecciona los workflows y genera las skills:
+
+```powershell
+openspec config set profile custom
+openspec config set delivery skills
+openspec config set workflows '["explore","propose","update","apply","verify","sync","archive"]'
+openspec init --tools agents --profile custom --no-animation
+```
+
+Estas preferencias son globales a esa instalación de CLI; se pueden aislar mediante XDG_CONFIG_HOME. Configurar `openspec/config.yaml` con contexto y reglas del cliente, comprobar los siete `.agents/skills/openspec-*/SKILL.md` (verify no pertenece a core) y crear un PR `feature/*` con configuración/specs y skills. Revisión y merge son humanos. La App solo admite la base integrada y no ejecuta init/update, no repara archivos ni crea ese PR. El antiguo script onboard_client.py se retira.
+
+El runtime consume las skills completas como instrucciones mediadas; allowed-tools no da acceso a shell. `openspec_skills` en el perfil confiable configura versiones compatibles y presupuestos: 128 KiB por skill, 1 MiB por catálogo y 512 KiB por prompt. Inicialmente generatedBy debe coincidir con la versión CLI; un cambio incompatible o una skill faltante bloquea la HU con diagnóstico. `.agents/` permanece solo lectura para el desarrollador.
+
+Actualizar CLI y skills fuera de las HUs, regenerar mediante `openspec update` con los workflows seleccionados y someter los cambios a otro PR humano. Un intento activo conserva SHA base, hashes y runtime; no cambia silenciosamente de instrucciones. Los procesos anteriores sin procedencia requieren reintento explícito con cliente preparado; consulta y cancelación siguen disponibles y su modalidad de publicación se conserva.
+
+La procedencia se guarda en cada llamada y los snapshots íntegros en `instructions/<run_id>/<attempt_id>/`, bajo las ACL del volumen de registros; no se exponen por el hilo principal. Los hashes normalizan rutas temporales para permitir recuperación en otro directorio. Fases deterministas generan evidencia sin llamadas o costos ficticios.
 
 El checkout completo se hace en una carpeta local temporal al SHA exacto de la base. El token de instalación solo se pasa en variables de entorno de Git y no se almacena en URL, argumentos, configuración ni logs. El harness rechaza enlaces y límites excedidos. Tras cada etapa conserva un checkpoint de los bytes cambiados y su manifiesto SHA-256 para restaurar el estado después de reinicios.
 
