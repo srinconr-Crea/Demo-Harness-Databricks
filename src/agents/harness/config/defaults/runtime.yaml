@@ -1,2 +1,2 @@
 logging:
-  max_text_chars: 32000
+  max_text_chars: 64000

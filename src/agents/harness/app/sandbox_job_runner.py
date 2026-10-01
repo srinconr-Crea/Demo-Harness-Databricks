@@ -62,7 +62,7 @@ def run(input_path: str, result_path: str, archive_sha256: str, test_paths: list
         }
         commands = []
         if test_paths:
-            commands.append([sys.executable, '-I', '-m', 'pytest', '-q', '-p', 'no:cacheprovider', '--disable-warnings', *test_paths])
+            commands.append([sys.executable, '-I', '-m', 'pytest', '-q', '-p', 'no:cacheprovider', '--disable-warnings', '-o', 'pythonpath=.', *test_paths])
         if bundle_target:
             executable = shutil.which('databricks')
             if not executable:

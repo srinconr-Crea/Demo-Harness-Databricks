@@ -8,7 +8,7 @@ Los intentos históricos conservan modalidad diff_review y awaiting_diff_review.
 
 ## Política de repositorio
 
-El ejemplo `tests/fixtures/clients/repository.yaml` declara repository_policy.scope: repository. Los perfiles existentes usan scope: prefixes y conservan allowed_paths y el piloto silver_safe_ratio. No se activa implícitamente NaturaPet ni se prueba código contra sus recursos.
+El perfil activo `config/clients/naturapet.yaml` versión 3 declara `repository_policy.scope: repository` y `general_patch`: permite crear, modificar y eliminar archivos de los tipos autorizados en los distintos dominios y capas, código, configuración, recursos, documentación y pruebas. El ejemplo `tests/fixtures/clients/repository.yaml` ilustra esa política. Los perfiles acotados pueden conservar `scope: prefixes` y `silver_safe_ratio`; las pruebas de NaturaPet no ejecutan sus recursos reales.
 
 La política central distingue lectura y escritura. read_only_paths permite consultar archivos sin editarlos; denied_paths excluye contexto y paquete de pruebas. `.github/`, `openspec/` y `AGENTS.md` son solo lectura para developer; `.git/`, `.env*`, credenciales y claves privadas quedan sin acceso. Las prohibiciones prevalecen sobre cualquier permiso de extensión. Solo el workflow OpenSpec puede escribir su prefijo. Rutas absolutas, traversal, unidades Windows, enlaces y escapes se rechazan.
 

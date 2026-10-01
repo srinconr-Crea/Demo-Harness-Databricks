@@ -1,4 +1,6 @@
 routing:
+  # Desarrollo general: Sonnet explora, planifica, aplica y verifica OpenSpec.
+  # Haiku conserva su función asesora; la HU no puede cambiar este routing.
   explorer: databricks-claude-sonnet-5
   planner: databricks-claude-sonnet-5
   openspec_verifier: databricks-claude-sonnet-5

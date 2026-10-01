@@ -345,6 +345,7 @@ class ConversationEngine:
             result = answer("explorer", 'explore', {
                 "task": "Explorar la HU, resumirla y preguntar solo lo necesario. JSON: summary, questions[]",
                 "story": story.model_dump(), "source_summary": _source_summary(root, self.profile),
+                "policy": self.profile.model_dump(),
                 "clarifications": context.get('clarifications', []),
             }, instructions=exploration_context(self.cli, root, self.profile), repo_context=RepoContext(root, self.profile))
             questions = result.get("questions")
@@ -418,6 +419,7 @@ class ConversationEngine:
                     "story": story.model_dump(), "artifacts": artifacts,
                     "source_summary": _source_summary(root, self.profile),
                     "allowed_paths": self.profile.general_patch.allowed_paths,
+                    "policy": self.profile.model_dump(),
                     'approved_manifest': context['plan_metadata']['manifest'],
                 }, instructions=apply_context, approved_hash=approved["sha256"], repo_context=RepoContext(root, self.profile))
                 raw = proposal.get("operations")

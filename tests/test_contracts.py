@@ -123,14 +123,25 @@ def test_profile_requires_standard_openspec_root():
         ClientProfile(repository="o/r", base_branch="develop", allowed_paths=["notebooks/"], openspec_root="../other")
 
 
-def test_naturapet_profile_accepts_second_story_without_hu_specific_yaml():
+def test_naturapet_profile_enables_general_changes_and_required_validation():
     config_dir = Path(__file__).resolve().parents[1] / "src" / "agents" / "harness" / "config" / "clients"
     profile = load_client_profile(config_dir, "naturapet")
-    data = valid_story()
-    data.update(id="NP-002", title="Costo sobre venta neta en Silver comercial", business_rules="costo_sobre_venta_pct = costo_total / base_neta_sin_iva; NULL cuando la venta neta sea cero o NULL")
-    spec = parse_ratio_story(Story.model_validate(data), profile)
-    assert spec.output_column == "costo_sobre_venta_pct"
-    assert profile.allows(profile.strategy.notebook)
+    from harness.validation import validation_plan
+    assert profile.strategy is None
+    assert profile.repository_policy.scope == 'repository'
+    for path in ['src/common/config.py', 'notebooks/finanzas/gold/one.ipynb',
+                 'conf/environments/dev.yml', 'resources/jobs/one.job.yml', 'README.md']:
+        assert profile.allows_code(path)
+    for path in ['.agents/skills/one/SKILL.md', '.github/workflows/deploy.yml',
+                 'openspec/config.yaml', 'AGENTS.md', '.env', 'private/value.py', 'data/raw.json']:
+        assert not profile.allows_code(path)
+    code = validation_plan(profile, ['src/common/config.py'])
+    assert code['requires_job'] and code['test_paths'] == ['tests']
+    assert any(check['adapter'] == 'pytest_sandbox' for check in code['checks'])
+    bundle = validation_plan(profile, ['resources/jobs/one.job.yml'])
+    assert bundle['bundle_target'] == 'dev' and bundle['requires_job']
+    assert any(check['adapter'] == 'databricks_bundle_validate' for check in bundle['checks'])
+    assert not validation_plan(profile, ['README.md'])['requires_job']
 
 
 def test_attempt_preserves_result_and_publication_for_historical_join():

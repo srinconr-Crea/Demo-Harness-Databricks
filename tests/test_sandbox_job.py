@@ -85,6 +85,8 @@ def test_sandbox_script_runs_tests_without_app_secrets(tmp_path: Path, monkeypat
     directory.mkdir(parents=True)
     source = directory / "input.zip"
     with zipfile.ZipFile(source, "w") as archive:
+        archive.writestr("src/value.py", "VALUE = 42\n")
+        archive.writestr("tests/test_import.py", "from src.value import VALUE\ndef test_checkout_import():\n    assert VALUE == 42\n")
         archive.writestr("tests/test_value.py", "import os\ndef test_secret_absent():\n    assert 'GITHUB_APP_PRIVATE_KEY' not in os.environ\n    assert 'DATABRICKS_TOKEN' not in os.environ\n")
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", "sensitive")
