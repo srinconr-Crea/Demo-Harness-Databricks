@@ -29,3 +29,5 @@ output/playwright/
 *.egg-info/
 build
 dist
+.deployments/
+src/agents/harness/config/deployment/

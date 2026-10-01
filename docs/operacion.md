@@ -1,54 +1,42 @@
 # Operación del Databricks Development Harness
 
-## Recursos y despliegue
+## Instalación y despliegue
 
-El bundle `databricks.yml` usa el catálogo `demo_harness_databricks_dev`, un volumen `artifacts` para registros, un volumen `demo_harness_sandbox` para paquetes de prueba y la tabla Delta `demo_harness_run_state` para coordinación. La App desplegada actualmente se llama `demo-dbx-harness-mvp`; el SQL warehouse aislado es `demo-harness-sandbox-wh` (`9e696889dea65361`). El perfil `CREA_DEV` apunta a `https://adb-7405606739630987.7.azuredatabricks.net`.
+Cada App atiende un cliente con el mismo código del producto. El operador entrega
+un perfil externo aprobado y parámetros de infraestructura mediante el
+[procedimiento de instalación](configuracion-instalacion.md). El bundle común no
+selecciona cliente ni workspace por defecto. Los nombres e IDs del piloto se
+conservan en [examples/naturapet](../examples/naturapet/README.md).
 
-La clave PEM de la GitHub App vive en el secret scope `demo-harness-databricks` y no se copia a Git, prompts ni Job. El Job `demo_harness_sandbox` requiere una identidad de servicio **dedicada**, distinta de la App y de cualquier identidad del cliente. En el bundle, sustituir `SET_DEDICATED_SANDBOX_SERVICE_PRINCIPAL` mediante la variable `sandbox_service_principal` antes de desplegar. Conceder a esa identidad solo `READ_VOLUME` y `WRITE_VOLUME` sobre `demo_harness_sandbox`; no conceder acceso al volumen de registros, al secreto GitHub, a endpoints de modelos ni a los recursos del cliente. La App recibe `CAN_MANAGE_RUN` sobre el Job y `READ_VOLUME`/`WRITE_VOLUME` sobre el volumen sandbox. Revisar estas concesiones en el plan del bundle y en Unity Catalog antes del despliegue.
+La instalación configura catálogo, esquema, volumen de registros, tabla de
+coordinación y sandbox exclusivos. La App necesita SELECT/MODIFY en la tabla y
+acceso a registros; el Job ejecuta con identidad dedicada distinta de la App y
+sin secretos GitHub, acceso a modelos o recursos del cliente. La clave privada
+se referencia desde secret scope; nunca se escribe en Git o perfiles. Revisar
+ACL antes de habilitar HUs, incluida lectura del runner Workspace por el Job.
 
-El entorno `dev` ya configura la identidad `demo_harness_sandbox`
-(`dac4cb01-380f-4af5-b594-132d6d693beb`) y el Job `611081415041874`.
-Las pruebas reales positivas y negativas y el recorrido de interfaz constan
-en la [evidencia de verificación](evidence/2026-09-30-openspec/verification.md).
-El despliegue inicial requirió `USE_CATALOG` y `USE_SCHEMA` en el catálogo y
-esquema del harness, además de los grants del volumen declarados en el bundle.
-La identidad necesita `CAN_READ` solo sobre el archivo Workspace
-`src/agents/harness/app/sandbox_job_runner.py` dentro de los archivos del bundle;
-comprobar ese ACL si se recrea el archivo. El usuario que configura `run_as`
-necesita el rol Service Principal User sobre la identidad dedicada, conservando
-los demás roles existentes según el [procedimiento oficial](https://learn.microsoft.com/en-us/azure/databricks/security/auth/access-control/service-principal-acl).
+Ejecutar bundle validate --strict desde el paquete con el perfil CLI del entorno.
+Para una instalación nueva, desplegar el bundle revisado y ejecutar la App. Para
+actualizar solo código de una App existente, sincronizar el paquete y ejecutar
+la App existente conservando sus bindings. La validación no demuestra permisos
+ni ejecución: completar smoke sintético positivo y negativo del Job. Registrar
+por separado evidencia local, validación y despliegue real.
 
-```powershell
-databricks auth describe --profile CREA_DEV
-databricks bundle validate --strict -t dev --profile CREA_DEV
-databricks bundle deploy -t dev --profile CREA_DEV --var sandbox_service_principal=<application-id-dedicado>
-databricks bundle run harness -t dev --profile CREA_DEV
-```
+El helper scripts/prepare_app_only_deployment.py sigue generando requests a partir
+de configuración renderizada; su modo provisional omite sandbox y bloquea pruebas
+que requieren Job. No usarlo para habilitar general_patch ejecutable sin sandbox.
+Los scripts de provisión requieren argumentos explícitos y recursos del harness.
 
-La validación comprueba el esquema del bundle; **no** demuestra que la identidad, grants y ejecución real del Job estén operativos. Probar primero con un cliente sintético. El despliegue o los cambios de permisos requieren revisión operativa. Para detener la App: `databricks apps stop demo-dbx-harness-mvp --profile CREA_DEV`.
+## Perfil y recuperación
 
-La tabla de coordinación se crea una vez antes del despliegue mediante `src/agents/harness/app/provision_run_state.py --profile CREA_DEV --warehouse-id 9e696889dea65361 --table demo_harness_databricks_dev.dev_srinconr_demo_harness_databricks.demo_harness_run_state`. La tabla ya fue preparada en el entorno de desarrollo; repetir el comando es idempotente. Confirmar que la App tiene `SELECT` y `MODIFY` sobre ella.
-
-## Publicación provisional de la App
-
-Mientras la identidad dedicada y las pruebas del Job están pendientes, publicar
-solo la App con los recursos existentes y la tabla de coordinación. El script
-siguiente omite los bindings del Job y del volumen sandbox; `general_patch`
-continúa bloqueado si requiere pruebas ejecutables. No ejecutar el despliegue
-completo del bundle hasta configurar la identidad dedicada.
-
-```powershell
-databricks bundle validate --strict -t dev --profile CREA_DEV -o json > .databricks/app-deploy-config.json
-src/agents/harness/.venv/Scripts/python.exe scripts/prepare_app_only_deployment.py .databricks/app-deploy-config.json
-databricks bundle sync -t dev --profile CREA_DEV
-databricks apps update demo-dbx-harness-mvp --profile CREA_DEV --json @.databricks/app-only-update.json
-databricks apps start demo-dbx-harness-mvp --profile CREA_DEV
-databricks apps deploy demo-dbx-harness-mvp --profile CREA_DEV --json @.databricks/app-only-deployment.json
-```
-
-Este procedimiento provisional se conserva como alternativa cuando el sandbox
-no esté disponible. En `dev` el Job ya está desplegado y probado; la preparación
-OpenSpec de cada cliente y su merge humano siguen siendo pasos de incorporación.
+El proceso fija perfil y hash al arrancar y los registra en cada intento y llamada.
+Los snapshots están protegidos por el mismo almacén y ACL de checkpoints. Una
+HU no modifica .harness/ ni activa configuración del repositorio. Las diferencias
+de perfil o falta de procedencia histórica bloquean continuación y aprobación;
+consulta y cancelación autorizadas siguen disponibles. Un reintento humano del
+mismo repo fija el perfil actual, vuelve a planificar y exige aprobación nueva.
+Drenar HUs antes de migrar y conservar paquete previo para rollback; nunca borrar
+checkpoints ni inventar procedencia del histórico. Véase la guía de instalación.
 
 ## Incorporación única de un cliente
 
@@ -79,13 +67,17 @@ El formulario recibe hu y description. GET /runs/{run_id} muestra estado, revisi
 
 POST /runs/{run_id}/actions recibe action, expected_revision, idempotency_key, expected_hash para aprobar y text para answer/changes. Una respuesta vuelve a explorar; pedir cambios produce propuesta nueva. Los históricos admiten aprobación del diff; los nuevos no requieren esa acción. Una base avanzada invalida el candidato y exige nueva planificación y aprobación. POST /runs/{run_id}/retry reintenta la etapa fallida con expected_revision. Los checkpoints y leases conservan recuperación e idempotencia.
 
-El perfil NaturaPet versión 3 usa `general_patch` con alcance de repositorio completo, nueve extensiones, operaciones create/modify/delete y límites de 40 archivos y 2 MB por candidato. Incluye Bronze/Silver/Gold de todos los dominios, `src/`, `conf/`, recursos, documentación y pruebas. `.github/`, `.agents/`, OpenSpec y `AGENTS.md` quedan protegidos; secretos, datos y directorios de runtime están excluidos. No habilita ejecución ni despliegue de recursos NaturaPet. `silver_safe_ratio` sigue disponible para otros perfiles que lo configuren.
+El perfil aprobado delimita alcance, operaciones, extensiones, límites y validadores.
+`.github/`, `.agents/`, `.harness/`, OpenSpec y `AGENTS.md` quedan protegidos;
+secretos, datos y runtime están excluidos según política. No habilita ejecución
+ni despliegue de recursos cliente. `silver_safe_ratio` conserva editor y prueba
+SQL acotados. Los valores concretos del piloto viven en su ejemplo.
 
 Las pruebas funcionales se seleccionan desde `tests/` del cliente y corren en el Job separado, junto con la validación estática del tipo de archivo. Pytest conserva Python aislado, plugins externos deshabilitados y entorno sin credenciales; `pythonpath=.` añade únicamente la raíz del checkout a las importaciones de pruebas. Los YAML compartidos mantienen Sonnet obligatorio y Haiku asesor, amplían la respuesta máxima a 12000 tokens y el registro resumido a 64000 caracteres. El presupuesto de contexto cliente permite 50 lecturas, 400 KB acumulados y 120 segundos por etapa.
 
 Antes de la primera HU, integrar en `develop` la preparación manual OpenSpec 1.13.2 con las siete skills, contexto del proyecto y reglas; comprobar el acceso de la GitHub App y mantener pruebas sintéticas del comportamiento afectado. Una primera prueba de documentación o código puro con regresiones existentes evita depender de recursos externos. La suite actual `tests/test_project_structure.py` es una regresión inicial; nuevas reglas funcionales requieren pruebas específicas en el manifiesto aprobado.
 
-Los cambios en `databricks.yml` o `resources/` activan obligatoriamente `bundle validate --strict -t dev`, porque ese target existe en el cliente. Esta comprobación requiere CLI Databricks y autenticación aislada provisionadas en el Job; el runtime actual del Job solo declara pytest y no prepara dichas herramientas. Hasta provisionarlas, las HUs de bundle quedan bloqueadas en verificación y no publican PR. Nunca usar credenciales de la App como alternativa ni ejecutar bundle deploy/run del cliente. La revisión del PR y la parada de la App siguen siendo decisiones humanas.
+Los cambios en `databricks.yml` o `resources/` activan obligatoriamente `bundle validate --strict -t dev`, si ese target está configurado en el perfil aprobado. Esta comprobación requiere CLI Databricks y autenticación aislada provisionadas en el Job; el runtime actual del Job solo declara pytest y no prepara dichas herramientas. Hasta provisionarlas, las HUs de bundle quedan bloqueadas en verificación y no publican PR. Nunca usar credenciales de la App como alternativa ni ejecutar bundle deploy/run del cliente. La revisión del PR y la parada de la App siguen siendo decisiones humanas.
 
 ## Registros, costos y retención
 

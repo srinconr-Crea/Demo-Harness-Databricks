@@ -22,6 +22,21 @@ def _checkpoint_path(path: str) -> None:
 
 
 class _CheckpointStore:
+    def save_profile_snapshot(self, data: bytes) -> str:
+        if len(data) > 131072:
+            raise ValueError('Perfil excedido')
+        digest = hashlib.sha256(data).hexdigest()
+        self._write_checkpoint_file(f'profiles/{digest}.yaml', data)
+        return digest
+
+    def load_profile_snapshot(self, digest: str) -> bytes:
+        if re.fullmatch(r'[a-f0-9]{64}', digest) is None:
+            raise ValueError('Referencia de perfil inválida')
+        data = self._read_checkpoint_file(f'profiles/{digest}.yaml')
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise ValueError('Falló integridad del perfil')
+        return data
+
     def save_instruction_snapshot(self, run_id, attempt_id, snapshot):
         _safe_key(run_id, attempt_id)
         data = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
@@ -171,7 +186,7 @@ class LocalRunStore(_CheckpointStore):
     def _write_checkpoint_file(self, relative: str, contents: bytes) -> None:
         destination = self.directory / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
-        temporary = destination.with_suffix(destination.suffix + ".tmp")
+        temporary = destination.with_name(uuid.uuid4().hex + ".tmp")
         temporary.write_bytes(contents)
         os.replace(temporary, destination)
 

@@ -18,6 +18,7 @@ from pydantic import (
     ValidationError,
     field_validator,
     model_validator,
+    PrivateAttr,
 )
 
 
@@ -216,6 +217,7 @@ class OpenSpecAttempt(BaseModel):
 
 class RunAttempt(BaseModel):
     attempt_id: str
+    profile_provenance: dict | None = None
     publication_mode: Literal['diff_review', 'approved_plan'] = 'diff_review'
     state: RunState
     stage: RunStage | None = None
@@ -272,6 +274,7 @@ class AgentCallContract(BaseModel):
     revision: int | None = Field(default=None, ge=0)
     approved_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     instruction_provenance: dict | None = None
+    profile_provenance: dict | None = None
     model: str
     status: Literal["complete", "failed"] = "complete"
     input_text: str | None = None
@@ -343,6 +346,8 @@ class OpenSpecSkillPolicy(BaseModel):
 
 
 class ClientProfile(BaseModel):
+    _source_bytes: bytes = PrivateAttr(default=b'')
+    _source_mode: str = PrivateAttr(default='in_memory')
     name: str = "default"
     version: str = "1"
     repository: str
@@ -373,7 +378,7 @@ class ClientProfile(BaseModel):
         from .repository_policy import denied, matches
         policy = self.repository_policy
         if denied(path, policy.denied_paths) or any(matches(path, p) for p in [
-            '.github', '.agents', self.openspec_root, 'AGENTS.md', *policy.read_only_paths]):
+            '.github', '.agents', '.harness', self.openspec_root, 'AGENTS.md', *policy.read_only_paths]):
             return False
         return policy.scope == 'repository' or any(matches(path, p) for p in self.allowed_paths)
 

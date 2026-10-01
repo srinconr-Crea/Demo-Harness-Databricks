@@ -12,6 +12,7 @@ from harness.contracts import (
     Story,
     estimate_cost,
     load_client_profile,
+    load_profile,
     parse_agent_output,
     parse_ratio_story,
 )
@@ -124,8 +125,8 @@ def test_profile_requires_standard_openspec_root():
 
 
 def test_naturapet_profile_enables_general_changes_and_required_validation():
-    config_dir = Path(__file__).resolve().parents[1] / "src" / "agents" / "harness" / "config" / "clients"
-    profile = load_client_profile(config_dir, "naturapet")
+    config_dir = Path(__file__).resolve().parents[1] / "examples" / "naturapet"
+    profile = load_profile(config_dir / "client-profile.yaml")
     from harness.validation import validation_plan
     assert profile.strategy is None
     assert profile.repository_policy.scope == 'repository'

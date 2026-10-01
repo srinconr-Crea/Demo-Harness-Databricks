@@ -152,6 +152,7 @@ def create_conversation_app(engine, profile) -> FastAPI:
             "model": item.get("model"), "status": item.get("status"),
             "input_tokens": item.get("input_tokens"), "output_tokens": item.get("output_tokens"),
             "estimated_cost_usd": item.get("estimated_cost_usd"),
+            "profile_provenance": item.get("profile_provenance"),
             "completed_at": item.get("completed_at"),
         } for item in items), key=lambda item: item["completed_at"] or "")}
 
@@ -207,6 +208,9 @@ def create_conversation_app(engine, profile) -> FastAPI:
         attempt = record["attempts"][-1]
         timeline = attempt.get("timeline") or []
         legacy = attempt.get('context', {}).get('instruction_engine') != 'client-skills-v1'
+        if record.get('repository') != profile.repository:
+            raise HTTPException(status_code=409, detail='El repositorio no corresponde a esta instalación')
+        legacy = legacy or not engine.profile_matches(record)
         if (record["state"] not in {"queued", "running", "awaiting_plan_review", "awaiting_clarification", "awaiting_diff_review"}
                 or attempt["revision"] != payload.expected_revision
                 or (not legacy and (record['state'] not in {'queued', 'running'} or not timeline or timeline[-1]['kind'] != 'error'))):

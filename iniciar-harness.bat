@@ -1,10 +1,14 @@
 @echo off
 setlocal
-set "DATABRICKS_AUTH_STORAGE=plaintext"
-databricks apps start demo-dbx-harness-mvp --profile CREA_DEV
-if errorlevel 1 (
-  echo No se pudo iniciar demo-dbx-harness-mvp. Revisa el perfil CREA_DEV.
-  exit /b 1
+if "%~1"=="" goto usage
+if "%~2"=="" goto usage
+if exist "%~dp0src\agents\harness\.venv\Scripts\python.exe" (
+  "%~dp0src\agents\harness\.venv\Scripts\python.exe" "%~dp0scripts\start_harness.py" "%~1" "%~2"
+) else (
+  py -3 "%~dp0scripts\start_harness.py" "%~1" "%~2"
 )
-start "" "https://demo-dbx-harness-mvp-7405606739630987.7.azure.databricksapps.com"
+exit /b %errorlevel%
+:usage
+echo Uso: iniciar-harness.bat APP_NAME DATABRICKS_PROFILE
+exit /b 1
 endlocal

@@ -1,0 +1,16 @@
+name: synthetic
+version: '1'
+repository: example/synthetic
+base_branch: develop
+openspec_root: openspec
+ui:
+  display_name: Cliente sintético
+allowed_paths: [src/, tests/]
+general_patch:
+  max_files: 10
+  max_bytes: 100000
+  allowed_paths: [src/, tests/]
+  operations: [create, modify, delete]
+  extensions: [.py, .md]
+  test_adapters: [python_compile, pytest_sandbox, markdown_structure]
+  test_paths: [tests]

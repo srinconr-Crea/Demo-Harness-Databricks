@@ -1,0 +1,12 @@
+bundle_name: demo_harness_databricks
+workspace_host: https://adb-7405606739630987.7.azuredatabricks.net
+variables:
+  catalog: demo_harness_databricks_dev
+  catalog_storage_root: abfss://demo@demodldb.dfs.core.windows.net/harness/demo_harness_databricks_dev
+  app_name: demo-dbx-harness-mvp
+  warehouse_id: 9e696889dea65361
+  sonnet_endpoint: databricks-claude-sonnet-5
+  verifier_endpoint: databricks-claude-haiku-4-5
+  github_secret_scope: demo-harness-databricks
+  github_secret_key: github-app-private-key
+  sandbox_service_principal: dac4cb01-380f-4af5-b594-132d6d693beb

@@ -176,7 +176,7 @@ class GitHubAppClient:
         self._check_repo(repository)
         if base_branch != self.base_branch or not branch.startswith("feature/") or ".." in branch:
             raise ValueError("Rama Git fuera de política")
-        if not files or any(path.startswith(("/", ".github/")) or ".." in path.split("/") or "\\" in path or "//" in path for path in files):
+        if not files or any(path.casefold().startswith(("/", ".github/", ".harness/")) or path.casefold() == '.harness' or ".." in path.split("/") or "\\" in path or "//" in path for path in files):
             raise ValueError("Ruta de publicación fuera de política")
         owner = repository.split("/", 1)[0]
         existing = self._request("GET", f"/repos/{repository}/pulls", params={"head": f"{owner}:{branch}", "base": base_branch, "state": "open"})

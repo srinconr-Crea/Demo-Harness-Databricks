@@ -32,7 +32,7 @@ class SandboxJobRunner:
             for directory, folders, files in os.walk(root, followlinks=False):
                 current = Path(directory)
                 from .repository_policy import denied
-                folders[:] = [name for name in folders if not denied((current / name).relative_to(root).as_posix(),
+                folders[:] = [name for name in folders if name.casefold() != '.harness' and not denied((current / name).relative_to(root).as_posix(),
                     profile.repository_policy.denied_paths if profile else ())]
                 if any((current / name).is_symlink() for name in folders):
                     raise ValueError("El sandbox no admite enlaces en el checkout")

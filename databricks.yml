@@ -12,8 +12,11 @@ variables:
     description: Dedicated managed storage root for the harness catalog
   app_name:
     description: Databricks App managed by this bundle
-  client_profile:
-    description: YAML client profile selected at runtime
+  client_profile_path:
+    description: Operator-approved profile delivered with this installation
+    default: config/deployment/client.yaml
+  client_profile_sha256:
+    description: SHA-256 of the delivered profile
   warehouse_id:
     description: Isolated SQL warehouse for synthetic validation
   sonnet_endpoint:
@@ -53,8 +56,10 @@ resources:
         env:
           - name: RUN_STORE_DIR
             value: /Volumes/${resources.volumes.artifacts.catalog_name}/${resources.volumes.artifacts.schema_name}/${resources.volumes.artifacts.name}/runs
-          - name: HARNESS_CLIENT_PROFILE
-            value: ${var.client_profile}
+          - name: HARNESS_CLIENT_PROFILE_PATH
+            value: ${var.client_profile_path}
+          - name: HARNESS_CLIENT_PROFILE_SHA256
+            value: ${var.client_profile_sha256}
           - name: HARNESS_APP_NAME
             value: ${var.app_name}
           - name: GITHUB_APP_PRIVATE_KEY
@@ -124,7 +129,9 @@ resources:
 sync:
   include:
     - src/agents/**
+    - src/agents/harness/config/deployment/client.yaml
   exclude:
+    - .deployments/**
     - .playwright-cli/**
     - .ui-preview-data/**
     - ui_preview_local.py
@@ -137,16 +144,3 @@ targets:
   dev:
     default: true
     mode: development
-    workspace:
-      host: https://adb-7405606739630987.7.azuredatabricks.net
-    variables:
-      catalog: demo_harness_databricks_dev
-      catalog_storage_root: abfss://demo@demodldb.dfs.core.windows.net/harness/demo_harness_databricks_dev
-      app_name: demo-dbx-harness-mvp
-      client_profile: naturapet
-      warehouse_id: 9e696889dea65361
-      sonnet_endpoint: databricks-claude-sonnet-5
-      verifier_endpoint: databricks-claude-haiku-4-5
-      github_secret_scope: demo-harness-databricks
-      github_secret_key: github-app-private-key
-      sandbox_service_principal: dac4cb01-380f-4af5-b594-132d6d693beb

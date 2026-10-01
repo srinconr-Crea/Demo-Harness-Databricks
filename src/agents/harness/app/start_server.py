@@ -18,10 +18,10 @@ sys.path.insert(0, str(ROOT))
 from harness.contracts import (
     AgentCallContract,
     RatioSpec,
-    load_client_profile,
     parse_agent_output,
 )
 from harness.conversation import ConversationEngine
+from harness.client_config import load_selected_profile
 from harness.conversation_webapp import create_conversation_app
 from harness.coordination import DeltaRunCoordinator, SqliteRunCoordinator
 from harness.github import GitHubAppClient
@@ -36,7 +36,7 @@ from harness.sandbox import verify_general_patch, verify_safe_ratio
 from harness.sandbox_job import SandboxJobRunner
 from harness.store import LocalRunStore, VolumeRunStore
 
-PROFILE = load_client_profile(ROOT / "config" / "clients", os.environ["HARNESS_CLIENT_PROFILE"])
+PROFILE = load_selected_profile(ROOT)
 ROUTING, PRICES, PRICING_SOURCE = load_model_config(ROOT / "config" / "defaults" / "models.yaml")
 RUNTIME = load_runtime_config(ROOT / "config" / "defaults" / "runtime.yaml")
 AGENT_CONFIG = yaml.safe_load((ROOT / "config" / "defaults" / "agents.yaml").read_text(encoding="utf-8"))
@@ -84,6 +84,7 @@ def models_factory(run_id: str, attempt_id: str):
             stage=response.stage, revision=response.revision,
             approved_sha256=response.approved_sha256,
             instruction_provenance=response.instruction_provenance,
+            profile_provenance=next(a for a in record['attempts'] if a['attempt_id'] == attempt_id).get('profile_provenance'),
             input_text=response.input_text, output_text=response.output_text,
             input_sha256=response.input_sha256, output_sha256=response.output_sha256,
             parsed_output=sanitize_log_value(parsed_output, RUNTIME["logging"]["max_text_chars"]),

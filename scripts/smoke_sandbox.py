@@ -14,11 +14,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src/agents/harness
 from harness.sandbox_job import SandboxJobRunner
 
 
-def smoke(profile: str, job_id: int, volume_dir: str) -> list[dict]:
+def smoke(profile: str, job_id: int, volume_dir: str, app_name: str) -> list[dict]:
     workspace = WorkspaceClient(profile=profile)
     job = workspace.jobs.get(job_id)
     principal = job.settings.run_as.service_principal_name
-    app = workspace.apps.get("demo-dbx-harness-mvp")
+    app = workspace.apps.get(app_name)
     if not principal or principal == app.service_principal_client_id:
         raise ValueError("El Job debe ejecutar con una identidad distinta de la App")
     runner = SandboxJobRunner(workspace.api_client, workspace.files,
@@ -58,5 +58,6 @@ if __name__ == "__main__":
     parser.add_argument("--profile", required=True)
     parser.add_argument("--job-id", required=True, type=int)
     parser.add_argument("--volume-dir", required=True)
+    parser.add_argument("--app-name", required=True)
     args = parser.parse_args()
-    print(json.dumps(smoke(args.profile, args.job_id, args.volume_dir), indent=2))
+    print(json.dumps(smoke(args.profile, args.job_id, args.volume_dir, args.app_name), indent=2))

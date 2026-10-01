@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .checkout import GitCheckout, restore_checkpoint, snapshot_changes
 from .contracts import RunAttempt, RunContract, Story, StoryRequest
+from .client_config import provenance, profile_bytes
 from .models import ModelInvocationError, sanitize_log_value
 from .openspec import (
     OpenSpecCLI,
@@ -117,6 +118,26 @@ class ConversationEngine:
     def _save(self, record: dict) -> None:
         self.store.save(record["run_id"], RunContract.model_validate(record).model_dump(mode="json"))
 
+    @property
+    def profile_identity(self):
+        return provenance(self.profile)
+
+    def _profile_ref(self):
+        digest = self.store.save_profile_snapshot(profile_bytes(self.profile))
+        return {**self.profile_identity, 'snapshot_sha256': digest}
+
+    def profile_matches(self, record):
+        ref = record['attempts'][-1].get('profile_provenance') or {}
+        return record.get('repository') == self.profile.repository and all(
+            ref.get(k) == self.profile_identity[k] for k in ('sha256', 'repository'))
+
+    def _require_profile(self, record):
+        if not self.profile_matches(record):
+            raise ValueError('El perfil del intento cambió o no tiene procedencia; requiere reintento explícito')
+        ref = record['attempts'][-1]['profile_provenance']
+        if self.store.load_profile_snapshot(ref['snapshot_sha256']) != profile_bytes(self.profile):
+            raise ValueError('El snapshot del perfil no coincide')
+
     def submit(self, story: StoryRequest, *, actor: str) -> str:
         if not actor:
             raise ValueError("Falta identidad de quien envía la HU")
@@ -126,6 +147,7 @@ class ConversationEngine:
         timestamp = _now()
         attempt = RunAttempt(
             attempt_id=attempt_id, state="queued", stage="exploring",
+            profile_provenance=self._profile_ref(),
             publication_mode=self.publication_mode,
             context={'instruction_engine': 'client-skills-v1'},
             queued_at=timestamp, messages=[{"kind": "story", "actor": actor, "text": story.description, "at": timestamp}],
@@ -165,12 +187,15 @@ class ConversationEngine:
     def retry_legacy(self, run_id: str):
         record = self.get(run_id)
         old = record['attempts'][-1]
-        if old.get('context', {}).get('instruction_engine') == 'client-skills-v1':
+        if record.get('repository') != self.profile.repository:
+            raise ValueError('El repositorio del intento no corresponde a esta instalación')
+        if old.get('context', {}).get('instruction_engine') == 'client-skills-v1' and self.profile_matches(record):
             return
         if old.get('publication', {}).get('pr_url'):
             raise ValueError('El intento ya tiene un PR; revisar publicación existente')
         identifier = uuid.uuid4().hex
         attempt = RunAttempt(attempt_id=identifier, state='queued', stage='exploring',
+            profile_provenance=self._profile_ref(),
             publication_mode=old.get('publication_mode', 'diff_review'), queued_at=_now(),
             context={'instruction_engine': 'client-skills-v1', 'previous_attempt_id': old['attempt_id']},
             messages=list(old.get('messages', [])[:1])).model_dump(mode='json')
@@ -204,6 +229,8 @@ class ConversationEngine:
                      key: str, expected_hash: str | None = None, text: str | None = None) -> dict:
         record = self.get(run_id)
         attempt = record["attempts"][-1]
+        if action != 'cancel':
+            self._require_profile(record)
         if key in attempt.get("context", {}).get("action_keys", []):
             return record
         stage = attempt.get("stage")
@@ -246,6 +273,18 @@ class ConversationEngine:
             previous_checkpoint = row.get("checkpoint_id")
             try:
                 cancelling = action and action['kind'] == 'cancel'
+                if cancelling:
+                    self._event(attempt, 'cancel', actor=action['actor'])
+                    attempt['stage'] = attempt['state'] = record['state'] = 'cancelled'
+                    attempt['finished_at'] = record['finished_at'] = record['updated_at'] = _now()
+                    attempt.setdefault('context', {}).setdefault('action_keys', []).append(action['key'])
+                    if self.coordinator.finish(run_id, attempt['attempt_id'], expected_version=claimed['version'],
+                        owner=owner, key=f'finish:{transition_key}', stage='cancelled',
+                        checkpoint_id=previous_checkpoint, now=time.time()) is None:
+                        raise ValueError('La cancelación perdió su lease')
+                    self._save(record)
+                    return record
+                self._require_profile(record)
                 if not cancelling and attempt.get('context', {}).get('instruction_engine') != 'client-skills-v1':
                     raise ValueError('Intento histórico sin procedencia: requiere reintento explícito con cliente preparado')
                 github = self.github_factory()
@@ -324,6 +363,7 @@ class ConversationEngine:
             and (policy is None or Path(path).suffix in policy.extensions))
 
     def _step(self, root: Path, record: dict, attempt: dict, github, models, action: dict | None) -> str:
+        self._require_profile(record)
         stage = attempt["stage"]
         story = StoryRequest.model_validate(record["story"])
         context = attempt.setdefault("context", {})
