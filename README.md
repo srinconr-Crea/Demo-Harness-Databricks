@@ -21,6 +21,9 @@ El Job dedicado ya tiene una identidad separada y pruebas sintéticas positivas 
 
 ## Estructura
 
+Para retomar el desarrollo sin depender del historial del chat, consulta el
+[protocolo de contexto del proyecto](docs/contexto-proyecto.md).
+
 | Ruta | Función |
 | --- | --- |
 | `databricks.yml`, `resources/` | Bundle aislado de App, catálogo, esquema, volumen y experimento. |

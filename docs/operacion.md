@@ -1,5 +1,9 @@
 # Operación del Databricks Development Harness
 
+Para desarrollar o retomar un cambio del producto, consulta el
+[protocolo de contexto del proyecto](contexto-proyecto.md). La guía distingue
+las fuentes del harness de las fuentes de cada repositorio cliente.
+
 ## Instalación y despliegue
 
 Cada App atiende un cliente con el mismo código del producto. El operador entrega
@@ -75,7 +79,7 @@ SQL acotados. Los valores concretos del piloto viven en su ejemplo.
 
 Las pruebas funcionales se seleccionan desde `tests/` del cliente y corren en el Job separado, junto con la validación estática del tipo de archivo. Pytest conserva Python aislado, plugins externos deshabilitados y entorno sin credenciales; `pythonpath=.` añade únicamente la raíz del checkout a las importaciones de pruebas. Los YAML compartidos mantienen Sonnet obligatorio y Haiku asesor, amplían la respuesta máxima a 12000 tokens y el registro resumido a 64000 caracteres. El presupuesto de contexto cliente permite 50 lecturas, 400 KB acumulados y 120 segundos por etapa.
 
-Antes de la primera HU, integrar en `develop` la preparación manual OpenSpec 1.13.2 con las siete skills, contexto del proyecto y reglas; comprobar el acceso de la GitHub App y mantener pruebas sintéticas del comportamiento afectado. Una primera prueba de documentación o código puro con regresiones existentes evita depender de recursos externos. La suite actual `tests/test_project_structure.py` es una regresión inicial; nuevas reglas funcionales requieren pruebas específicas en el manifiesto aprobado.
+Antes de la primera HU, integrar en `develop` la preparación manual OpenSpec 1.13.2 con las siete skills, contexto del proyecto y reglas; comprobar el acceso de la GitHub App y mantener pruebas sintéticas del comportamiento afectado. Una primera prueba de documentación o código puro con regresiones existentes evita depender de recursos externos. Selecciona pruebas existentes en el checkout cliente: este harness no aporta automáticamente una suite al cliente. En el producto, [test_project_context.py](../tests/test_project_context.py) comprueba referencias y el contexto general; nuevas reglas funcionales requieren pruebas específicas en el manifiesto aprobado.
 
 Los cambios en `databricks.yml` o `resources/` activan obligatoriamente `bundle validate --strict -t dev`, si ese target está configurado en el perfil aprobado. Esta comprobación requiere CLI Databricks y autenticación aislada provisionadas en el Job; el runtime actual del Job solo declara pytest y no prepara dichas herramientas. Hasta provisionarlas, las HUs de bundle quedan bloqueadas en verificación y no publican PR. Nunca usar credenciales de la App como alternativa ni ejecutar bundle deploy/run del cliente. La revisión del PR y la parada de la App siguen siendo decisiones humanas.
 

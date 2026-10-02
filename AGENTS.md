@@ -2,6 +2,8 @@
 
 Instrucciones para agentes de código que trabajen en este repositorio. El proyecto se generó desde `agentops-stacks` y conserva `.agentops-stacks/manifest.yml` como procedencia. Consulta `README.md` y `docs/operacion.md` antes de modificar recursos o ejecutar una HU.
 
+Para iniciar o retomar trabajo en una conversación nueva, sigue el [protocolo de contexto del proyecto](docs/contexto-proyecto.md). Comprueba rama, SHA y cambios locales, recupera las fuentes pertinentes y distingue propuestas de implementación verificada. El protocolo no amplía los límites siguientes.
+
 ## Límites del harness
 
 - El repositorio del harness está separado de `srinconr-Crea/Naturapet_DLH`. No copies el bundle del harness dentro de NaturaPet.
