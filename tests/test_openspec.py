@@ -1,12 +1,14 @@
+import json
 from pathlib import Path
 
 import pytest
-
-import json
-
 from harness.contracts import ClientProfile, RatioSpec, Story, StoryRequest
+from harness.openspec import (
+    OpenSpecCLI,
+    prepare_client_workspace,
+    propose_client_change,
+)
 from openspec_helpers import prepare_manual, write_skills
-from harness.openspec import OpenSpecCLI, prepare_client_workspace, propose_client_change
 
 
 def profile():
@@ -37,15 +39,14 @@ def test_client_workspace_requires_existing_openspec_before_planning(tmp_path: P
 
 
 def test_client_workspace_preserves_existing_config_and_specs(tmp_path: Path):
-    cli = OpenSpecCLI()
     root = tmp_path / "client"
     root.mkdir()
     existing = {
         "openspec/config.yaml": ("schema: spec-driven\ncontext: Client owned context\n", "config-sha"),
         "openspec/specs/existing/spec.md": (
-            "# Existing\n\n## Purpose\nClient owned capability.\n\n## Requirements\n"
+            ("# Existing\n\n## Purpose\nClient owned capability.\n\n## Requirements\n"
             "### Requirement: Keep\nThe client SHALL keep this.\n\n"
-            "#### Scenario: Kept\n- **WHEN** loaded\n- **THEN** it remains.\n", "spec-sha"
+            "#### Scenario: Kept\n- **WHEN** loaded\n- **THEN** it remains.\n"), "spec-sha"
         ),
     }
 
@@ -201,7 +202,11 @@ def test_planner_rejects_manifest_outside_profile_before_developer(tmp_path: Pat
 
 
 def test_client_change_archives_and_collects_publishable_files(tmp_path: Path):
-    from harness.openspec import collect_changed_openspec, mark_tasks_complete, plan_client_change
+    from harness.openspec import (
+        collect_changed_openspec,
+        mark_tasks_complete,
+        plan_client_change,
+    )
 
     root = tmp_path / "client"
     root.mkdir()
@@ -222,7 +227,11 @@ def test_client_change_archives_and_collects_publishable_files(tmp_path: Path):
 
 
 def test_archived_change_preserves_existing_client_config(tmp_path: Path):
-    from harness.openspec import collect_changed_openspec, mark_tasks_complete, plan_client_change
+    from harness.openspec import (
+        collect_changed_openspec,
+        mark_tasks_complete,
+        plan_client_change,
+    )
 
     root = tmp_path / "client"
     root.mkdir()

@@ -3,9 +3,10 @@ import json
 import os
 import shutil
 import subprocess
-from pathlib import Path
+
 from harness.openspec import OpenSpecCLI
 from harness.skills import SKILLS
+
 
 def write_skills(root):
     for name in SKILLS.values():

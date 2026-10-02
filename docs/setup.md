@@ -2,6 +2,8 @@
 
 > Guía original del scaffold `agentops-stacks` para un despliegue de tres ambientes. El MVP solo define `dev`; para operar la App actual usa [`operacion.md`](operacion.md). Los pasos de staging/prod de esta guía no están configurados.
 
+> Sus módulos heredados se conservan en [el ejemplo histórico](../examples/legacy-agentops-scaffold/README.md). Esta guía conserva el procedimiento de origen; no es la configuración vigente de la App.
+
 End-to-end configuration to get this project deploying. The flow:
 
 1. [Prerequisites](#1-prerequisites) — what your account/workspace need to have first

@@ -23,4 +23,4 @@ Para iniciar o retomar trabajo en una conversación nueva, sigue el [protocolo d
 
 La clave privada de GitHub App vive en el secret scope `demo-harness-databricks`; no la escribas en Git, prompts, logs o PR. La App consume Foundation Model API de Databricks, no una API LLM externa. Si agregas un cliente, mantén su contexto en un perfil separado y conserva controles deterministas para su repo, rutas y sandbox.
 
-Los archivos `agent.py`, `graph.py`, `tools.py` y `eval/` provienen del scaffold y no participan en el flujo FastAPI actual. Pueden servir como base para evaluación o futuras extensiones; no asumas que sus gates equivalen a pruebas del código que crea el harness.
+El scaffold `agent.py`, `graph.py`, `tools.py` y `eval/` se conserva en [examples/legacy-agentops-scaffold](examples/legacy-agentops-scaffold/README.md), fuera del paquete FastAPI. Es una referencia histórica; sus gates no equivalen a pruebas del código que crea el harness. `harness/evaluation.py` permanece como evaluación real del producto.

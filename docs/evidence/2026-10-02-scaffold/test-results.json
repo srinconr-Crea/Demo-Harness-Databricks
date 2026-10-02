@@ -1,0 +1,1379 @@
+{
+  "grouped_suite": {
+    "passed": 227,
+    "failed": 0,
+    "skipped": 0
+  },
+  "additional_ratio_verification": {
+    "passed": 2,
+    "seconds": 95.75,
+    "cases": [
+      "positive-restart-to-simulated-pr",
+      "negative-no-publication"
+    ]
+  },
+  "tests": [
+    {
+      "class": "tests.test_checkout",
+      "name": "test_checkout_pins_exact_base_and_does_not_store_token",
+      "seconds": 2.106,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_checkout",
+      "name": "test_checkout_rejects_wrong_sha_and_leaves_no_checked_out_files",
+      "seconds": 1.569,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_checkout",
+      "name": "test_checkout_rejects_symlink_before_checkout",
+      "seconds": 1.953,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_checkout",
+      "name": "test_checkpoint_restores_exact_modified_created_and_deleted_files",
+      "seconds": 4.086,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_checkout",
+      "name": "test_checkpoint_rejects_unapproved_path_before_restoration",
+      "seconds": 2.051,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_external_profile_is_loaded_once_and_relative_to_root",
+      "seconds": 0.023,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_external_profile_fails_closed_without_raw_content[missing]",
+      "seconds": 0.008,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_external_profile_fails_closed_without_raw_content[yaml]",
+      "seconds": 0.021,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_external_profile_fails_closed_without_raw_content[large]",
+      "seconds": 0.021,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_external_profile_fails_closed_without_raw_content[hash]",
+      "seconds": 0.008,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_external_profile_fails_closed_without_raw_content[secret]",
+      "seconds": 0.035,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_external_profile_fails_closed_without_raw_content[unknown]",
+      "seconds": 0.032,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_external_profile_fails_closed_without_raw_content[contract]",
+      "seconds": 0.012,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_external_profile_fails_closed_without_raw_content[unreadable]",
+      "seconds": 0.01,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_selector_errors_do_not_fall_back[env0]",
+      "seconds": 0.005,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_selector_errors_do_not_fall_back[env1]",
+      "seconds": 0.006,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_selector_errors_do_not_fall_back[env2]",
+      "seconds": 0.005,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_selector_errors_do_not_fall_back[env3]",
+      "seconds": 0.005,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_selector_errors_do_not_fall_back[env4]",
+      "seconds": 0.005,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_selector_errors_do_not_fall_back[env5]",
+      "seconds": 0.005,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_legacy_profile_and_link_rejection",
+      "seconds": 0.016,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_harness_policy_is_protected_in_editor_and_publisher[create]",
+      "seconds": 0.785,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_harness_policy_is_protected_in_editor_and_publisher[modify]",
+      "seconds": 0.403,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_harness_policy_is_protected_in_editor_and_publisher[delete]",
+      "seconds": 0.333,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_changed_profile_blocks_recovery_and_explicit_retry_replans",
+      "seconds": 5.367,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_historical_missing_profile_allows_cancel_but_requires_new_attempt",
+      "seconds": 4.627,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_retry_cannot_move_run_to_another_repository",
+      "seconds": 1.006,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_packaging_two_clients_and_configuration",
+      "seconds": 1.679,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_ui_reads_name_without_exposing_profile[Cliente A]",
+      "seconds": 1.84,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_client_config",
+      "name": "test_ui_reads_name_without_exposing_profile[Cliente B]",
+      "seconds": 2.366,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_invalid_policy[values0]",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_invalid_policy[values1]",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_invalid_policy[values2]",
+      "seconds": 0.003,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_invalid_policy[values3]",
+      "seconds": 0.004,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_invalid_policy[values4]",
+      "seconds": 0.003,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_policy_is_frozen_and_defaults_disabled",
+      "seconds": 0.006,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_invalid_tool_contract[tool_request0]",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_invalid_tool_contract[tool_request1]",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_invalid_tool_contract[tool_request2]",
+      "seconds": 0.003,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_invalid_tool_contract[tool_request3]",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_invalid_tool_contract[tool_request4]",
+      "seconds": 0.003,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_catalog_roles_phases_and_stable_hashes",
+      "seconds": 0.023,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_cache_ttl_lru_bytes_and_integrity",
+      "seconds": 0.003,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_cache_source_candidate_inventory_and_revoked_access",
+      "seconds": 0.092,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_decisions_do_not_expire_and_preserve_ambiguous_original",
+      "seconds": 0.022,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_conflict_explicit_replacement_and_fact_staleness",
+      "seconds": 0.072,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_model_interpretation_never_confirms",
+      "seconds": 0.024,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_budget_includes_system_and_never_compacts",
+      "seconds": 0.019,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_dedup_refresh_and_forty_rounds",
+      "seconds": 0.213,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_real_model_calls_have_trusted_system_usage_and_protected_snapshot",
+      "seconds": 0.014,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_invalid_output_and_no_tool_for_advisor",
+      "seconds": 0.02,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_enabled_flow_restart_corruption_and_public_api",
+      "seconds": 37.481,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_policy_change_blocks_actions_retry_does_not_inherit_approval",
+      "seconds": 3.639,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_legacy_does_not_get_fabricated_management",
+      "seconds": 1.043,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_context_manager",
+      "name": "test_context_snapshot_integrity_is_independent_of_checkpoint_commit",
+      "seconds": 0.041,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_two_field_story_request_rejects_blank_input",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_new_attempt_tracks_review_stage_and_legacy_run_remains_readable",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_story_requires_all_five_manual_sections",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_profile_restricts_path_and_branch",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_cost_uses_independent_input_and_output_rates",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_cost_missing_usage_stays_unknown",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_ratio_story_is_derived_from_hu_not_client_profile",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_ratio_story_rejects_columns_not_allowed_by_profile",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_client_profile_selection_cannot_escape_config_directory",
+      "seconds": 0.022,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_profile_requires_standard_openspec_root",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_naturapet_profile_enables_general_changes_and_required_validation",
+      "seconds": 0.011,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_attempt_preserves_result_and_publication_for_historical_join",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_agent_call_contract_exposes_input_output_and_request_join",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_agent_call_joins_stage_revision_and_approved_hash_without_fabricated_cost",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_agent_output_schema_rejects_wrong_role_fields",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_contracts",
+      "name": "test_planner_output_requires_bounded_manifest",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_conversation_webapp",
+      "name": "test_two_field_api_enforces_identity_and_review_revision",
+      "seconds": 15.894,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_conversation",
+      "name": "test_full_conversation_waits_for_both_human_approvals",
+      "seconds": 45.747,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_conversation",
+      "name": "test_restart_keeps_plan_wait_and_exact_revision",
+      "seconds": 16.636,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_conversation",
+      "name": "test_diff_correction_restores_prearchive_change_before_update",
+      "seconds": 39.555,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_conversation",
+      "name": "test_base_advance_invalidates_approved_candidate",
+      "seconds": 36.367,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_conversation",
+      "name": "test_ratio_editor_remains_available_in_conversational_apply",
+      "seconds": 33.181,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_conversation",
+      "name": "test_failed_client_tests_return_to_plan_revision_without_diff",
+      "seconds": 21.886,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_conversation",
+      "name": "test_full_synthetic_story_corrects_failed_test_then_creates_pr",
+      "seconds": 45.578,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_conversation",
+      "name": "test_pr_identity_survives_failure_after_pr_creation",
+      "seconds": 35.784,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_coordination",
+      "name": "test_expired_lease_can_be_claimed_by_only_one_worker",
+      "seconds": 0.03,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_coordination",
+      "name": "test_transition_requires_live_lease_and_is_idempotent",
+      "seconds": 0.025,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_coordination",
+      "name": "test_delta_coordinator_uses_bound_values_and_rejects_lost_claim",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_coordination",
+      "name": "test_delta_table_provisioning_targets_only_the_harness_table",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_evaluation",
+      "name": "test_evaluation_joins_calls_to_the_correct_attempt_and_preserves_missing_cost",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_general_patch",
+      "name": "test_general_example_profile_requires_configured_sandbox_tests",
+      "seconds": 0.004,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_general_patch",
+      "name": "test_general_patch_creates_modifies_and_deletes_allowed_text",
+      "seconds": 0.011,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_general_patch",
+      "name": "test_general_patch_rejects_unapproved_paths[../outside.py]",
+      "seconds": 0.003,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_general_patch",
+      "name": "test_general_patch_rejects_unapproved_paths[.github/workflows/x.py]",
+      "seconds": 0.003,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_general_patch",
+      "name": "test_general_patch_rejects_unapproved_paths[src/../../x.py]",
+      "seconds": 0.003,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_general_patch",
+      "name": "test_general_patch_rejects_unapproved_paths[src/file.exe]",
+      "seconds": 0.003,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_general_patch",
+      "name": "test_general_patch_rejects_stale_hash_and_binary",
+      "seconds": 0.008,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_general_patch",
+      "name": "test_general_code_requires_dedicated_job_for_publication",
+      "seconds": 0.005,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_general_patch",
+      "name": "test_general_code_combines_syntax_and_job_evidence",
+      "seconds": 0.016,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_installation_acceptance",
+      "name": "test_two_clients_use_the_same_engine_with_external_profiles[client-a]",
+      "seconds": 31.504,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_installation_acceptance",
+      "name": "test_two_clients_use_the_same_engine_with_external_profiles[client-b]",
+      "seconds": 31.826,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_installation_acceptance",
+      "name": "test_windows_launcher_uses_selected_app_and_url[ok]",
+      "seconds": 0.016,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_installation_acceptance",
+      "name": "test_windows_launcher_uses_selected_app_and_url[start-error]",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_installation_acceptance",
+      "name": "test_windows_launcher_uses_selected_app_and_url[get-error]",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_installation_acceptance",
+      "name": "test_windows_launcher_uses_selected_app_and_url[missing-url]",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_installation_acceptance",
+      "name": "test_windows_launcher_uses_selected_app_and_url[bad-url]",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_installation_acceptance",
+      "name": "test_windows_launcher_uses_selected_app_and_url[wrong-app]",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_installation_acceptance",
+      "name": "test_windows_launcher_uses_selected_app_and_url[missing-argument]",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_model_router_uses_foundation_endpoint_and_records_tokens",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_model_usage_missing_is_not_zero",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_model_call_sink_receives_role_response_usage_and_cost",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_model_call_preserves_stage_revision_and_approval_on_failure",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_four_planner_calls_use_sonnet_and_each_reaches_json_sink",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_model_call_id_is_sent_before_invocation_and_input_output_are_recorded",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_model_failure_is_logged_without_fabricating_cost",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_empty_model_response_is_logged_as_failure",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_nested_parsed_output_is_redacted_before_persistence",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_model_config_is_keyed_by_endpoint_not_hardcoded_role_prices",
+      "seconds": 0.007,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_planner_model_is_fixed_to_sonnet_five",
+      "seconds": 0.008,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_all_openspec_roles_route_to_sonnet_five",
+      "seconds": 0.018,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_runtime_logging_limits_are_loaded_from_yaml",
+      "seconds": 0.01,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_model_normalizes_text_blocks_from_foundation_api",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_github_rejects_unapproved_repository_and_base_branch",
+      "seconds": 0.264,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_github_reads_only_client_openspec_files_at_base_sha",
+      "seconds": 0.277,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_existing_pr_only_reused_when_content_matches",
+      "seconds": 0.246,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_existing_pr_with_extra_file_is_not_reused",
+      "seconds": 0.292,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_github_publishes_code_and_openspec_in_one_commit",
+      "seconds": 0.252,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_github_publishes_a_deletion_and_reuses_only_matching_pr",
+      "seconds": 0.472,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_pr_check_snapshot_never_calls_missing_checks_passed[runs0-pending]",
+      "seconds": 0.349,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_pr_check_snapshot_never_calls_missing_checks_passed[runs1-pending]",
+      "seconds": 0.302,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_pr_check_snapshot_never_calls_missing_checks_passed[runs2-passed]",
+      "seconds": 0.236,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_pr_check_snapshot_never_calls_missing_checks_passed[runs3-failed]",
+      "seconds": 0.248,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_integrations",
+      "name": "test_check_read_uses_separate_narrow_token",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_notebook_edit",
+      "name": "test_adds_measure_once_without_changing_other_fields",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_notebook_edit",
+      "name": "test_missing_target_fails_closed",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_notebook_edit",
+      "name": "test_pilot_source_compiles",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_notebook_edit",
+      "name": "test_rejects_conflicting_existing_measure",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_openspec",
+      "name": "test_client_workspace_requires_existing_openspec_before_planning",
+      "seconds": 1.614,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_openspec",
+      "name": "test_client_workspace_preserves_existing_config_and_specs",
+      "seconds": 0.643,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_openspec",
+      "name": "test_client_workspace_never_calls_init_for_existing_base",
+      "seconds": 0.048,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_openspec",
+      "name": "test_generic_proposal_can_be_updated_and_strictly_validated",
+      "seconds": 13.719,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_openspec",
+      "name": "test_client_workspace_rejects_path_escape",
+      "seconds": 0.006,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_openspec",
+      "name": "test_openspec_cli_fails_closed_when_missing",
+      "seconds": 0.01,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_openspec",
+      "name": "test_openspec_cli_timeout_is_failure",
+      "seconds": 0.01,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_openspec",
+      "name": "test_planner_creates_and_validates_client_change",
+      "seconds": 5.322,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_openspec",
+      "name": "test_planner_rejects_manifest_outside_profile_before_developer",
+      "seconds": 2.372,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_openspec",
+      "name": "test_client_change_archives_and_collects_publishable_files",
+      "seconds": 10.673,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_openspec",
+      "name": "test_archived_change_preserves_existing_client_config",
+      "seconds": 5.82,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_project_context",
+      "name": "test_context_yaml_budget_and_canonical_sources",
+      "seconds": 0.01,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_project_context",
+      "name": "test_entry_point_links_resolve[AGENTS.md]",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_project_context",
+      "name": "test_entry_point_links_resolve[README.md]",
+      "seconds": 0.005,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_project_context",
+      "name": "test_entry_point_links_resolve[docs/operacion.md]",
+      "seconds": 0.01,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_project_context",
+      "name": "test_entry_point_links_resolve[docs/contexto-proyecto.md]",
+      "seconds": 0.012,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_project_context",
+      "name": "test_link_check_detects_missing_and_external_paths",
+      "seconds": 0.033,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_pyspark_smoke",
+      "name": "test_transformed_derive_positive_zero_and_null",
+      "seconds": 13.346,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[.github]",
+      "seconds": 0.008,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[.github/workflows/x.yaml]",
+      "seconds": 0.006,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[openspec/specs/x.md]",
+      "seconds": 0.006,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[AGENTS.md]",
+      "seconds": 0.006,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[.git]",
+      "seconds": 0.008,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[.git/config]",
+      "seconds": 0.007,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[nested/.git/config]",
+      "seconds": 0.007,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[.env]",
+      "seconds": 0.009,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[.envrc]",
+      "seconds": 0.006,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[private/a.py]",
+      "seconds": 0.005,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[locked/a.py]",
+      "seconds": 0.006,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[../escape.py]",
+      "seconds": 0.008,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[C:/escape.py]",
+      "seconds": 0.01,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_protected_paths[src/../a.py]",
+      "seconds": 0.008,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_repository_root_operations_are_atomic",
+      "seconds": 0.026,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_context_read_only_and_denied_search_and_hash",
+      "seconds": 0.031,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_context_rounds_and_explicit_truncation",
+      "seconds": 0.012,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_adapter_selection_covers_impact_and_bundle",
+      "seconds": 0.003,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_static_adapters_positive_negative[x.sql-sql_lint-SELECT 1-SELECT ( FROM]",
+      "seconds": 0.223,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_static_adapters_positive_negative[x.yaml-yaml_validate-value: 2-value: [oops]",
+      "seconds": 0.021,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_static_adapters_positive_negative[x.json-json_validate-{\"value\":2}-{oops]",
+      "seconds": 0.009,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_static_adapters_positive_negative[x.toml-toml_validate-value = 2-value = []",
+      "seconds": 0.018,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_static_adapters_positive_negative[x.py-python_compile-VALUE = 2-def (]",
+      "seconds": 0.027,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_static_adapters_positive_negative[x.md-markdown_structure-# Title-missing title]",
+      "seconds": 0.011,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_static_adapters_positive_negative[x.txt-text_validate-text-text\\x00binary]",
+      "seconds": 0.01,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_schema_rejects_missing_required_and_external_references",
+      "seconds": 0.011,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_notebook_languages_magics_and_invalid_syntax",
+      "seconds": 0.421,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_archive_excludes_secrets_but_includes_read_only",
+      "seconds": 0.032,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_new_story_publishes_automatically_with_advisory_failures[reject]",
+      "seconds": 30.013,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_new_story_publishes_automatically_with_advisory_failures[invalid]",
+      "seconds": 27.61,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_new_story_publishes_automatically_with_advisory_failures[timeout]",
+      "seconds": 26.371,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_storage_errors_are_not_swallowed_as_advisory",
+      "seconds": 18.046,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_candidate_tamper_and_missing_tests_block_publication",
+      "seconds": 20.479,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_checklist_never_infers_archive_or_pr_success",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_context_symlink_and_prefix_neighbor_are_rejected",
+      "seconds": 0.006,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_automatic_publication_rechecks_base_after_archive",
+      "seconds": 33.274,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_sonnet_rejection_needs_new_plan",
+      "seconds": 22.367,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_repository_workflow",
+      "name": "test_manifest_expansion_needs_new_plan",
+      "seconds": 18.104,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_sandbox_job",
+      "name": "test_managed_sandbox_grants_keep_app_and_job_access_on_redeployment",
+      "seconds": 0.003,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_sandbox_job",
+      "name": "test_job_uploads_bounded_checkout_and_reads_matching_result",
+      "seconds": 0.02,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_sandbox_job",
+      "name": "test_sandbox_script_runs_tests_without_app_secrets",
+      "seconds": 0.687,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_sandbox_job",
+      "name": "test_sandbox_script_rejects_archive_traversal",
+      "seconds": 0.025,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_sandbox_job",
+      "name": "test_bundle_validation_is_fixed_bounded_and_mandatory[passed]",
+      "seconds": 0.03,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_sandbox_job",
+      "name": "test_bundle_validation_is_fixed_bounded_and_mandatory[failed]",
+      "seconds": 0.015,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_sandbox_job",
+      "name": "test_bundle_validation_is_fixed_bounded_and_mandatory[timeout]",
+      "seconds": 0.025,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_sandbox_job",
+      "name": "test_bundle_validation_is_fixed_bounded_and_mandatory[missing_cli]",
+      "seconds": 0.014,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_sandbox_job",
+      "name": "test_bundle_validation_is_fixed_bounded_and_mandatory[missing_target]",
+      "seconds": 0.01,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_sandbox",
+      "name": "test_remote_synthetic_rows_pass_without_ddl",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_sandbox",
+      "name": "test_remote_wrong_result_fails",
+      "seconds": 0.001,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_scaffold_packaging",
+      "name": "test_distributable_keeps_runtime_and_excludes_legacy",
+      "seconds": 2.434,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_scaffold_packaging",
+      "name": "test_packaged_fastapi_entrypoint_starts_without_credentials",
+      "seconds": 5.121,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skill_conversation",
+      "name": "test_missing_skill_blocks_before_model_and_can_cancel",
+      "seconds": 2.062,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skill_conversation",
+      "name": "test_recovery_blocks_tampered_skill_and_legacy_can_restart",
+      "seconds": 6.183,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skill_conversation",
+      "name": "test_real_cli_skills_complete_automatic_conversation[False]",
+      "seconds": 120.057,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skill_conversation",
+      "name": "test_real_cli_skills_complete_automatic_conversation[True]",
+      "seconds": 117.789,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skills",
+      "name": "test_skill_catalog_rejects_invalid_preparation[missing]",
+      "seconds": 0.017,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skills",
+      "name": "test_skill_catalog_rejects_invalid_preparation[utf8]",
+      "seconds": 0.016,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skills",
+      "name": "test_skill_catalog_rejects_invalid_preparation[name]",
+      "seconds": 0.02,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skills",
+      "name": "test_skill_catalog_rejects_invalid_preparation[version]",
+      "seconds": 0.021,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skills",
+      "name": "test_skill_catalog_rejects_invalid_preparation[size]",
+      "seconds": 0.022,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skills",
+      "name": "test_skill_catalog_rejects_invalid_preparation[denied]",
+      "seconds": 0.018,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skills",
+      "name": "test_skill_path_escape_and_junction_are_rejected",
+      "seconds": 0.062,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skills",
+      "name": "test_catalog_and_prompt_budgets_and_immutable_skill",
+      "seconds": 0.093,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skills",
+      "name": "test_normalized_snapshots_survive_new_checkout_and_tampering",
+      "seconds": 0.138,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skills",
+      "name": "test_every_context_round_logs_provenance_without_changing_endpoint_context",
+      "seconds": 0.084,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skills",
+      "name": "test_real_manual_agents_init_installs_all_workflows",
+      "seconds": 1.856,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skills",
+      "name": "test_cli_context_rejects_external_paths_and_blocked_apply",
+      "seconds": 0.014,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_skills",
+      "name": "test_skills_are_read_only_even_for_repository_scope",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_store",
+      "name": "test_volume_store_round_trip",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_store",
+      "name": "test_volume_store_persists_agent_calls_joinable_by_run_and_attempt",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_store",
+      "name": "test_historical_and_new_call_json_join_same_attempt_without_invented_cost",
+      "seconds": 0.026,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_store",
+      "name": "test_volume_store_lists_only_run_records",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_store",
+      "name": "test_openspec_artifacts_are_isolated_by_attempt_in_local_and_volume_stores",
+      "seconds": 0.049,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_store",
+      "name": "test_checkpoint_preserves_exact_bytes_deletions_and_base_for_both_stores",
+      "seconds": 0.037,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_store",
+      "name": "test_volume_checkpoint_rejects_modified_blob",
+      "seconds": 0.002,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_store",
+      "name": "test_checkpoint_rejects_paths_outside_checkout",
+      "seconds": 0.011,
+      "outcome": "passed"
+    },
+    {
+      "class": "tests.test_store",
+      "name": "test_checkpoint_carries_state_for_recovery_after_control_transition",
+      "seconds": 0.031,
+      "outcome": "passed"
+    }
+  ]
+}

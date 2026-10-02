@@ -79,7 +79,7 @@ class SandboxJobRunner:
         })
         job_run_id = request.get("run_id")
         if not isinstance(job_run_id, int):
-            raise ValueError("El Job sandbox no devolvió run_id")
+            raise ValueError("El Job sandbox no devolvió run_id")  # noqa: TRY004 - invalid external response contract
         deadline = time.monotonic() + self.timeout_seconds
         while True:
             status = self.api.do("GET", f"/api/2.2/jobs/runs/get?run_id={job_run_id}")

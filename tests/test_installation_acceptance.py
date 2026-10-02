@@ -8,12 +8,11 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-
 from harness.client_config import read_profile
 from harness.contracts import StoryRequest
 from harness.conversation import ConversationEngine
 from harness.conversation_webapp import create_conversation_app
-from test_conversation import make_engine, git
+from test_conversation import git, make_engine
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,7 +44,7 @@ def test_two_clients_use_the_same_engine_with_external_profiles(tmp_path, name):
         env['PYTEST_DISABLE_PLUGIN_AUTOLOAD'] = '1'
         env['PYTHONDONTWRITEBYTECODE'] = '1'
         completed = subprocess.run([sys.executable, '-m', 'pytest', 'tests', '-q', '-p', 'no:cacheprovider',
-                                    '-o', 'pythonpath=.'], cwd=root, env=env, capture_output=True, text=True)
+                                    '-o', 'pythonpath=.'], cwd=root, env=env, capture_output=True, text=True, check=False)
         assert completed.returncode == 0, completed.stdout + completed.stderr
         return {'passed': True, 'evidence': [completed.stdout]}
     engine = ConversationEngine(selected, store, coordinator, lambda: github, lambda *_: models,

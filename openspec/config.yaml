@@ -12,8 +12,8 @@ context: |
   src/agents/harness/config/ (perfiles y configuración). databricks.yml y resources/
   definen el bundle; tests/ contiene las pruebas del flujo y sus controles.
   README.md y docs/operacion.md describen la operación actual; AGENTS.md fija
-  límites para agentes de código. El scaffold agent.py, graph.py, tools.py y eval/
-  no participa en el flujo FastAPI actual.
+  límites para agentes de código. examples/legacy-agentops-scaffold/ conserva
+  el scaffold histórico fuera del paquete y del flujo FastAPI actual.
 
   Contexto del desarrollo: docs/contexto-proyecto.md define cómo iniciar o retomar
   trabajo desde fuentes versionadas. openspec/specs/ expresa requisitos vigentes;

@@ -30,7 +30,7 @@ Para retomar el desarrollo sin depender del historial del chat, consulta el
 | `src/agents/harness/app/` | Formulario y servidor FastAPI. |
 | `src/agents/harness/harness/` | Contratos, orquestación, GitHub App, modelos, validación y almacenamiento. |
 | `src/agents/harness/config/` | Defaults comunes de roles, routing, precios y límites; el perfil se entrega al despliegue. |
-| `examples/` | Perfiles y configuración de instalaciones de ejemplo, separados del runtime. |
+| `examples/` | Perfiles de instalación y [scaffold histórico](examples/legacy-agentops-scaffold/README.md), separados del runtime y del paquete de despliegue. |
 | `openspec/` | Especificaciones del harness y cambios planificados. Cada cliente conserva su propio árbol OpenSpec en su repositorio. |
 | `docs/agents/` | Especificación de la App y contratos de los roles. |
 | `docs/sql/` | Consultas por llamada y conciliación opcional con `endpoint_usage`. |

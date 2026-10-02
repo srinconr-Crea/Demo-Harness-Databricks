@@ -65,9 +65,10 @@ def apply_file_operations(root: Path, profile: ClientProfile, operations: list[F
             raise ValueError("La ruta de edición no es un archivo regular")
         if operation.op == "create" and target.exists():
             raise ValueError("El archivo nuevo ya existe")
-        if operation.op != "create":
-            if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest() != operation.expected_sha256:
-                raise ValueError("El hash del archivo ya no coincide con el borrador")
+        if operation.op != "create" and (
+            not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest() != operation.expected_sha256
+        ):
+            raise ValueError("El hash del archivo ya no coincide con el borrador")
         content = operation.content.encode("utf-8") if operation.content is not None else None
         if content is not None and b"\0" in content:
             raise ValueError("Contenido binario no admitido")

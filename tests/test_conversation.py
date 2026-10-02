@@ -4,14 +4,13 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from harness.checkout import GitCheckout
 from harness.contracts import ClientProfile, StoryRequest
-from harness.coordination import SqliteRunCoordinator
 from harness.conversation import ConversationEngine
+from harness.coordination import SqliteRunCoordinator
 from harness.store import LocalRunStore
-from test_notebook_edit import fixture_notebook
 from openspec_helpers import write_skills
+from test_notebook_edit import fixture_notebook
 
 
 def git(*args, cwd=None):
@@ -147,7 +146,7 @@ def make_engine(tmp_path: Path):
 
 
 def test_full_conversation_waits_for_both_human_approvals(tmp_path: Path):
-    engine, github, models, store, coordinator, profile = make_engine(tmp_path)
+    engine, github, models, store, _coordinator, _profile = make_engine(tmp_path)
     run_id = engine.submit(StoryRequest(hu="HU-9", description="Cambiar VALUE a 2"), actor="ana@example.com")
     engine.advance(run_id)
     run = store.load(run_id)
@@ -229,7 +228,8 @@ def test_base_advance_invalidates_approved_candidate(tmp_path: Path):
     assert github.published == []
 
 
-def test_ratio_editor_remains_available_in_conversational_apply(tmp_path: Path):
+@pytest.mark.parametrize('checks_pass', [True, False])
+def test_ratio_editor_remains_available_in_conversational_apply(tmp_path: Path, checks_pass):
     engine, github, models, store, _coordinator, _profile = make_engine(tmp_path)
     notebook_path = "notebooks/comercial/silver/04_business_derivations.ipynb"
     target = github.source / notebook_path
@@ -255,6 +255,7 @@ def test_ratio_editor_remains_available_in_conversational_apply(tmp_path: Path):
 
     models = RatioModels()
     engine.models_factory = lambda _run, _attempt: models
+    engine.test_runner = lambda *_: {'passed': checks_pass, 'evidence': ['synthetic ratio validation']}
     run_id = engine.submit(StoryRequest(
         hu="HU-RATIO", description="En fact_ventas_cabecera: margen_sobre_costo_pct = margen_bruto / costo_total; NULL si costo es cero o NULL",
     ), actor="ana@example.com")
@@ -264,9 +265,24 @@ def test_ratio_editor_remains_available_in_conversational_apply(tmp_path: Path):
     engine.act(run_id, "approve", actor="ana@example.com", expected_revision=attempt["revision"],
                expected_hash=attempt["context"]["plan_hash"], key="plan-ratio")
     attempt = store.load(run_id)["attempts"][-1]
+    if not checks_pass:
+        assert attempt['stage'] == 'awaiting_plan_review'
+        assert attempt['revision'] == 2
+        assert github.published == []
+        assert any(event['kind'] == 'verify_failed' for event in attempt['timeline'])
+        return
     assert attempt["stage"] == "awaiting_diff_review"
     assert attempt["context"]["ratio_spec"]["output_column"] == "margen_sobre_costo_pct"
     assert "margen_sobre_costo_pct" in store.load_review_diff(run_id, attempt["attempt_id"], attempt["revision"], attempt["context"]["diff_sha256"])
+    restarted = ConversationEngine(
+        engine.profile, store, engine.coordinator, lambda: github, lambda *_: models,
+        engine.cli, engine.test_runner,
+    )
+    restarted.act(run_id, "approve", actor="ana@example.com", expected_revision=attempt["revision"],
+                   expected_hash=attempt["context"]["candidate_hash"], key="diff-ratio")
+    final = store.load(run_id)["attempts"][-1]
+    assert final["stage"] == "complete" and len(github.published) == 1
+    assert final["context"]["ratio_spec"] == attempt["context"]["ratio_spec"]
 
 
 def test_failed_client_tests_return_to_plan_revision_without_diff(tmp_path: Path):

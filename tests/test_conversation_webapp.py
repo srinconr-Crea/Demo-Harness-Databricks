@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-
 from harness.contracts import StoryRequest
 from harness.conversation_webapp import create_conversation_app
 from test_conversation import make_engine

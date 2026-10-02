@@ -1,0 +1,177 @@
+{
+  "deployment_id": "01f1bea1fae712918b5087ac138dce29",
+  "snapshot": "/Workspace/Users/8910cd3e-32f6-4c75-b16f-b5ff3ea258d2/src/01f1bea1fae712918b5087ac138dce29",
+  "matched_files": 39,
+  "legacy_files_absent": true,
+  "binding_names": [
+    "github-private-key",
+    "haiku-four-five",
+    "run-records-read",
+    "run-records-write",
+    "run-state-table",
+    "run-state-table-read",
+    "sandbox-job",
+    "sandbox-volume-read",
+    "sandbox-volume-write",
+    "sandbox-warehouse",
+    "sonnet-five"
+  ],
+  "hashes": [
+    {
+      "path": "app.yaml",
+      "sha256": "714d6ca3a8f37a6711a45c4c86c9eef0f44debca52e1ad05bae04888a37bc04c"
+    },
+    {
+      "path": "app/index.html",
+      "sha256": "0f4e75cf79e35e4a75c5db266df1073a10422c03574086c976631a5c98c94d99"
+    },
+    {
+      "path": "app/provision_run_state.py",
+      "sha256": "fc11b6f280a66d4a31c2f90784a1c83b48ea25da8afee5d23275ff721288c5c2"
+    },
+    {
+      "path": "app/sandbox_job_runner.py",
+      "sha256": "3e9eac9494ad0fc42ba94a57c39195020ae614d6fbac36b1075478f9da640799"
+    },
+    {
+      "path": "app/start_server.py",
+      "sha256": "b8376040374d40d4098bd3c7c02e0bb3f3e980f02fe20f8f92d1dc1f186b30ed"
+    },
+    {
+      "path": "config/defaults/agents.yaml",
+      "sha256": "0f9f963e8ccbf35957eda5a23d1738cdbcd1012220c6845cd37c4dab6457e0f1"
+    },
+    {
+      "path": "config/defaults/context.yaml",
+      "sha256": "1a2d7a75c65f3b31bde8be93abbbb511686aae13bb863422b186613a20797736"
+    },
+    {
+      "path": "config/defaults/models.yaml",
+      "sha256": "dea5f474101dc0c31f2beef5ce2ce8c892895b4d465f4d8393a63aa57e8d237a"
+    },
+    {
+      "path": "config/defaults/prompts.yaml",
+      "sha256": "2d0c6ef6b61e358f898721842561ec54c2273118f3e1316478120453a980c02d"
+    },
+    {
+      "path": "config/defaults/runtime.yaml",
+      "sha256": "e6a2301302412cb0380c229682b95941718cb51772bb88e852158628c2eb0a9a"
+    },
+    {
+      "path": "config/deployment/client.yaml",
+      "sha256": "27ac71c9b2c0c3bdea588ee77d06df20eedb228fbf47002121404f6f7f0df01f"
+    },
+    {
+      "path": "harness/__init__.py",
+      "sha256": "49e06303d9a3572c9d11b5b1d71f95651324f182008dfad4a14411a64c918f82"
+    },
+    {
+      "path": "harness/checkout.py",
+      "sha256": "190a3d7f8c5852b398b5ae1c18eb8141e2b38c0c59c985bd99f9f6fa7269b1f7"
+    },
+    {
+      "path": "harness/client_config.py",
+      "sha256": "3ee36c80ade3f72f3a3ede87c7164359c00d9a4e35528c662908224b7a1476f4"
+    },
+    {
+      "path": "harness/context_manager.py",
+      "sha256": "00f2d3b40d67e91944203c818d814b9c33f672735dfc1f575d312225d329dbc1"
+    },
+    {
+      "path": "harness/contracts.py",
+      "sha256": "6da820ab7957a282ff266419f36bd30afc168f4753cfeaa2b8c0e1b82fc16cee"
+    },
+    {
+      "path": "harness/conversation.py",
+      "sha256": "c072493512877c98ea54fe4d75fafd3efa44daea7fab59faace4ab2f7f6021cc"
+    },
+    {
+      "path": "harness/conversation_webapp.py",
+      "sha256": "6d9eb72c465433a168774f77b7fdc9c852d418e91842a9e9e40b92847dce5e24"
+    },
+    {
+      "path": "harness/coordination.py",
+      "sha256": "2f9feb338b1b610ab6e64a81c0113317c570392cf369dfb760aa2600316c94e0"
+    },
+    {
+      "path": "harness/evaluation.py",
+      "sha256": "45f6a3e27e079b09fa519c0b56a2e1f146fdd08d51e3d0a71919fc24253da829"
+    },
+    {
+      "path": "harness/github.py",
+      "sha256": "d8cb0d238196115bb054d7f9761e36b77f3f2619a35c3453bd62054667c64688"
+    },
+    {
+      "path": "harness/models.py",
+      "sha256": "78fd262475c4e0689edec8edaf346db09b4ae27ef35dcb92a0acc2d30ff1f621"
+    },
+    {
+      "path": "harness/notebook_edit.py",
+      "sha256": "744556efeba81cfa65376f43c338176e1d147836e4589651d799097454de429a"
+    },
+    {
+      "path": "harness/openspec.py",
+      "sha256": "ce4be10a0f5aeda43d28cb6e4e04c9f4ece4a6cf1203078df20e13ee338bb682"
+    },
+    {
+      "path": "harness/patch.py",
+      "sha256": "d7b524e834c67628226162718712b9219cca33168e638d33eda8da894102cecc"
+    },
+    {
+      "path": "harness/progress.py",
+      "sha256": "11fab54232d57cd552d6dcffccaf3a51aa4acce3879d7239626f2ef5fb8d6935"
+    },
+    {
+      "path": "harness/prompt_contracts.py",
+      "sha256": "ea6ef791cdfda1b84f66a412742496911aa1b325eefc87e66ee7d17f49c27ae9"
+    },
+    {
+      "path": "harness/repo_context.py",
+      "sha256": "ef7a74ddd20380fdfba6798a4a27e7063509db42eedccca44e638baf58494309"
+    },
+    {
+      "path": "harness/repository_policy.py",
+      "sha256": "0122a2d5dd475569fe02b2b9a3b04b9351a63f753d7d0f7cc0afa34382fb6ce8"
+    },
+    {
+      "path": "harness/sandbox.py",
+      "sha256": "4c06db5b507704d57125a2f525c375496ba3c47f31f418e3403c5d3dd4075499"
+    },
+    {
+      "path": "harness/sandbox_job.py",
+      "sha256": "3f7204d9fd45db46aa13520820ad0c12d9c54cd28fbad065b24bd1fbe35a7a2e"
+    },
+    {
+      "path": "harness/skills.py",
+      "sha256": "a9e64e39ebef41606355b41b660bbeeeb0d31ef0d2ab0a369e47461501c3658d"
+    },
+    {
+      "path": "harness/store.py",
+      "sha256": "9464715d256ab170b778dcb3aba341080a4a18aa1be42e4221e1b45cd6758c39"
+    },
+    {
+      "path": "harness/strategies.py",
+      "sha256": "800196b2ce80a3da36d722b8be5649d116b9a5114b371a2c10cc450ba70e561c"
+    },
+    {
+      "path": "harness/validation.py",
+      "sha256": "310de007882314ccae9d61ae665dad6d4cabff63bffad05d3305aa29cd726db7"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "e97f71bf2b7c9954923eecbdf1bb4e75212d94c9dff364a2bfb4b1be7f64fd9d"
+    },
+    {
+      "path": "package.json",
+      "sha256": "3153448df44aac31b4c3b3cdd5b11751fe400ee1d1e6238ff7c2828585d2716c"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "706f3af92f9fa0fc641d544163d79e9757ffa23b5786b5782ae09971486fa4d8"
+    },
+    {
+      "path": "uv.lock",
+      "sha256": "05269df7de1dc078dcc68baffcbfe163dee3fe3b3ebd70f4d0dd5789df0529f3"
+    }
+  ]
+}

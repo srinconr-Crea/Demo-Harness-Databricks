@@ -1,7 +1,6 @@
 import io
 
 import pytest
-
 from harness.store import LocalRunStore, VolumeRunStore
 
 

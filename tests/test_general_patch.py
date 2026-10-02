@@ -2,7 +2,6 @@ import hashlib
 from pathlib import Path
 
 import pytest
-
 from harness.contracts import ClientProfile, load_profile
 from harness.patch import FileOperation, apply_file_operations
 from harness.sandbox import verify_general_patch

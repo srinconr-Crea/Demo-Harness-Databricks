@@ -3,7 +3,9 @@ import hashlib
 import json
 import stat
 from pathlib import Path
+
 import yaml
+
 from .repository_policy import safe_target
 
 SKILLS = {'explore': 'openspec-explore', 'propose': 'openspec-propose',

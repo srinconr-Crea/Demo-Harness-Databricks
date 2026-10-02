@@ -1,5 +1,10 @@
 # Supervisor Patterns
 
+> Documento histórico del scaffold `agentops-stacks`. Los módulos de referencia
+> se conservan en [el ejemplo histórico](../examples/legacy-agentops-scaffold/README.md).
+> El flujo FastAPI vigente se describe en [operacion.md](operacion.md); este
+> patrón y sus gates no forman parte de su entrada operativa.
+
 A supervisor agent routes user queries across your project's agents. When you
 have more than one agent, add a supervisor with the `/add-supervisor` skill (or
 `plugin/skills/agentops-stacks/scripts/add_supervisor.py`). It is scaffolded as

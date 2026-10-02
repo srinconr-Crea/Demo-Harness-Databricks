@@ -3,7 +3,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-import harness.contracts as contracts
+from harness import contracts
 from harness.contracts import (
     AgentCallContract,
     ClientProfile,

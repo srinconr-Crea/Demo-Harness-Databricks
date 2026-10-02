@@ -55,7 +55,7 @@ class OpenSpecCLI:
         except json.JSONDecodeError as error:
             raise ValueError("OpenSpec devolvió JSON inválido") from error
         if not isinstance(result, dict):
-            raise ValueError("OpenSpec devolvió un contrato inesperado")
+            raise ValueError("OpenSpec devolvió un contrato inesperado")  # noqa: TRY004 - invalid external JSON contract
         return result
 
     def version(self) -> str:

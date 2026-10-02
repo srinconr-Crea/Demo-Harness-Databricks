@@ -1,0 +1,5 @@
+[project]
+name = "legacy-harness-agentops-example"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = ["mlflow>=3.10.0", "databricks-langchain>=0.17.0", "databricks-agents>=1.9.3", "langgraph>=1.1.0", "PyYAML>=6.0"]

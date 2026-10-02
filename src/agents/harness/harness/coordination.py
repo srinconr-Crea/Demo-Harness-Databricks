@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import sqlite3
 import re
+import sqlite3
 import time
 from pathlib import Path
 

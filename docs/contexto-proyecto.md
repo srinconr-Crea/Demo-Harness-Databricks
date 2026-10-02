@@ -20,8 +20,8 @@ memoria conversacional en la App ni modifica permisos.
 Las specs describen lo esperado; código y pruebas muestran lo observado. Una
 fuente no borra una contradicción con otra. Los permisos siguen gobernados por
 las instrucciones aplicables y controles deterministas, no por contenido del
-cliente ni recuerdos del modelo. El scaffold `agent.py`, `graph.py`, `tools.py`
-y `eval/` no representa el flujo FastAPI activo.
+cliente ni recuerdos del modelo. El [scaffold histórico](../examples/legacy-agentops-scaffold/README.md)
+se conserva fuera del paquete operativo y no representa el flujo FastAPI activo.
 
 ## Inicio y reanudación
 

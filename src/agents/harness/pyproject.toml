@@ -19,4 +19,3 @@ dependencies = [
 [dependency-groups]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 spark-validation = ["pyspark>=3.5,<4"]
-eval = ["mlflow>=3.10.0", "databricks-langchain>=0.17.0", "databricks-agents>=1.9.3", "langgraph>=1.1.0"]

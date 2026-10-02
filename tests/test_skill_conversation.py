@@ -8,7 +8,7 @@ from test_conversation import FakeModels, git, make_engine
 
 
 def test_missing_skill_blocks_before_model_and_can_cancel(tmp_path):
-    engine, github, models, store, _, _ = make_engine(tmp_path)
+    engine, github, models, _store, _, _ = make_engine(tmp_path)
     (github.source / '.agents/skills/openspec-explore/SKILL.md').unlink()
     git('add', '.', cwd=github.source); git('commit', '-m', 'incomplete', cwd=github.source)
     github.sha = git('rev-parse', 'HEAD', cwd=github.source)
@@ -18,7 +18,7 @@ def test_missing_skill_blocks_before_model_and_can_cancel(tmp_path):
     assert models.calls == [] and github.published == []
 
 def test_recovery_blocks_tampered_skill_and_legacy_can_restart(tmp_path):
-    engine, github, models, store, _, _ = make_engine(tmp_path)
+    engine, _github, _models, store, _, _ = make_engine(tmp_path)
     run_id = engine.submit(StoryRequest(hu='HU', description='Change'), actor='ana')
     engine.advance(run_id)
     record = store.load(run_id)

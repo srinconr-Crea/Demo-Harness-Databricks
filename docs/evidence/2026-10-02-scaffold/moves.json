@@ -1,0 +1,55 @@
+{
+  "source_revision": "0ad1b387d7d0b2ff2a1904c6dfc259c4cd574f9f",
+  "moves": [
+    {
+      "source": "src/agents/harness/agent.py",
+      "target": "examples/legacy-agentops-scaffold/agent/agent.py",
+      "sha256": "bd0d47dd414d2b285d6e7cf9747ef884e5c886f5cfa9aa466e441c300d1d2dec"
+    },
+    {
+      "source": "src/agents/harness/graph.py",
+      "target": "examples/legacy-agentops-scaffold/agent/graph.py",
+      "sha256": "dfc42e1923cf40a08fb1c169e0a2c1a521ed3079fe682622d1d34873e387ba19"
+    },
+    {
+      "source": "src/agents/harness/tools.py",
+      "target": "examples/legacy-agentops-scaffold/agent/tools.py",
+      "sha256": "9e3e40138b88aee0cb93a7efdc310aab4d4a1f4fe9b2a5cd0ce536a4f8b384d7"
+    },
+    {
+      "source": "src/agents/harness/app/utils.py",
+      "target": "examples/legacy-agentops-scaffold/agent/app/utils.py",
+      "sha256": "337492ed09aec92ee53128286f02cb436b80d105d266858f3281a8192317a2d4"
+    },
+    {
+      "source": "src/agents/harness/eval/create_dataset.py",
+      "target": "examples/legacy-agentops-scaffold/agent/eval/create_dataset.py",
+      "sha256": "ab768a7c16bd18c151ff3dae42c17cc21ae5b9e44d924f7575996a0ddd41221b"
+    },
+    {
+      "source": "src/agents/harness/eval/evaluate_agent.py",
+      "target": "examples/legacy-agentops-scaffold/agent/eval/evaluate_agent.py",
+      "sha256": "8a0c07ab938103b8ed0d89f40fed5f5c544ca711e0688139709ce9bdfdf2ca95"
+    },
+    {
+      "source": "src/agents/harness/eval/gates.yml",
+      "target": "examples/legacy-agentops-scaffold/agent/eval/gates.yml",
+      "sha256": "d8d05d6012b0d2d0a397575533a0289c837cd7cb555ad4ef1be5889151d57a8f"
+    },
+    {
+      "source": "src/agents/harness/eval/utils.py",
+      "target": "examples/legacy-agentops-scaffold/agent/eval/utils.py",
+      "sha256": "a0e73bcda8dad38ae9e558bf8b57ea241e1d19660ae1cdbfc9461e0c7b2976af"
+    },
+    {
+      "source": "src/components/eval/scorers.py",
+      "target": "examples/legacy-agentops-scaffold/components/eval/scorers.py",
+      "sha256": "1c01bcf6e1fc1e12ab6d1bd0482c56951e288e24ffafe09c261ed6549f48a1a0"
+    },
+    {
+      "source": "resources/uc_function_registration.yml",
+      "target": "examples/legacy-agentops-scaffold/resources/uc_function_registration.yml",
+      "sha256": "e7960317de67acb8f90dae918bf5024b8969671ada03b89c13e6f6aa627ded5b"
+    }
+  ]
+}

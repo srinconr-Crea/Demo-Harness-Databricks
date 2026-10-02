@@ -1,14 +1,15 @@
 import json
 from decimal import Decimal
-import pytest
 
+import pytest
 from harness.contracts import ClientProfile
-from harness.skills import SkillCatalog, SKILLS
-from harness.repo_context import contextual_answer, RepoContext
 from harness.models import ModelClient, ModelInvocationError
 from harness.openspec import OpenSpecCLI, instruction_context
+from harness.repo_context import RepoContext, contextual_answer
+from harness.skills import SKILLS, SkillCatalog
 from harness.store import LocalRunStore
-from openspec_helpers import write_skills, prepare_manual
+from openspec_helpers import prepare_manual, write_skills
+
 
 def profile(**kwargs):
     return ClientProfile(repository='example/client', base_branch='develop',
@@ -40,7 +41,8 @@ def test_skill_path_escape_and_junction_are_rejected(tmp_path):
     folder = tmp_path / '.agents/skills/openspec-explore'
     moved = tmp_path / 'outside'
     folder.rename(moved)
-    import os, subprocess
+    import os
+    import subprocess
     if os.name == 'nt':
         subprocess.run(['cmd', '/c', 'mklink', '/J', str(folder), str(moved)], check=True, capture_output=True)
     else:
@@ -89,7 +91,8 @@ def test_every_context_round_logs_provenance_without_changing_endpoint_context(t
     (tmp_path / 'source.txt').write_text('hello')
     p = profile()
     class API:
-        bodies = []
+        def __init__(self):
+            self.bodies = []
         def do(self, *args, body):
             self.bodies.append(body)
             reply = {'context_request': {'op': 'read_file', 'path': 'source.txt'}} if len(self.bodies) == 1 else {'summary': 'ok', 'questions': []}
@@ -127,7 +130,7 @@ def test_cli_context_rejects_external_paths_and_blocked_apply(tmp_path):
     original = cli.instructions
     for field, replacement in [('state', 'blocked'), ('schemaName', 'custom'),
                                ('contextFiles', {'tasks': [str(tmp_path.parent / 'outside.md')]})]:
-        cli.instructions = lambda r, a, c: {**original(r, a, c), field: replacement}
+        cli.instructions = lambda r, a, c, field=field, replacement=replacement: {**original(r, a, c), field: replacement}
         with pytest.raises(ValueError):
             instruction_context(cli, root, 'change-one', 'apply', profile())
 

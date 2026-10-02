@@ -1,0 +1,17 @@
+{
+  "app": "demo-dbx-harness-mvp",
+  "url": "https://demo-dbx-harness-mvp-7405606739630987.7.azure.databricksapps.com",
+  "compute": "ACTIVE",
+  "app_state": "RUNNING",
+  "http": {
+    "/": {
+      "status": 200
+    },
+    "/configuration": {
+      "status": 200,
+      "ui": {
+        "display_name": "NaturaPet"
+      }
+    }
+  }
+}

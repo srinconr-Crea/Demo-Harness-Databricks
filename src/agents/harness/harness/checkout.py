@@ -6,8 +6,8 @@ import base64
 import os
 import re
 import subprocess
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 
 from .store import _checkpoint_path
 
@@ -43,7 +43,7 @@ class GitCheckout:
         if not token:
             raise ValueError("Falta token temporal para el checkout")
         env = os.environ.copy()
-        authorization = base64.b64encode(f"x-access-token:{token}".encode("utf-8")).decode("ascii")
+        authorization = base64.b64encode(f"x-access-token:{token}".encode()).decode("ascii")
         env.update({
             "GIT_CONFIG_COUNT": "1",
             "GIT_CONFIG_KEY_0": "http.https://github.com/.extraheader",

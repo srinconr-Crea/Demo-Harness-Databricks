@@ -2,9 +2,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
-from harness.checkout import GitCheckout
-from harness.checkout import snapshot_changes, restore_checkpoint
+from harness.checkout import GitCheckout, restore_checkpoint, snapshot_changes
 from harness.store import LocalRunStore
 
 
