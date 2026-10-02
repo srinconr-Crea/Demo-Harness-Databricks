@@ -1,0 +1,56 @@
+{
+  "comparison": [
+    {
+      "enabled": false,
+      "calls": 5,
+      "bytes_total": 123772,
+      "bytes_per_call": [
+        350,
+        12551,
+        24754,
+        36957,
+        49160
+      ],
+      "latency_ms": 47.345,
+      "usage": null,
+      "cost_usd": null,
+      "final": {
+        "summary": "evidence",
+        "questions": []
+      },
+      "cache": null
+    },
+    {
+      "enabled": true,
+      "calls": 5,
+      "bytes_total": 58134,
+      "bytes_per_call": [
+        1866,
+        14067,
+        14067,
+        14067,
+        14067
+      ],
+      "latency_ms": 50.245,
+      "usage": null,
+      "cost_usd": null,
+      "final": {
+        "summary": "evidence",
+        "questions": []
+      },
+      "cache": {
+        "hits": 3,
+        "misses": 1,
+        "invalidations": 0
+      }
+    }
+  ],
+  "stress": {
+    "turns": 40,
+    "substitutions": 39,
+    "restorations": 40,
+    "originals_preserved": true,
+    "budget_blocked": true
+  },
+  "scope": "local synthetic stub; latency includes deterministic work, no network or LLM usage"
+}

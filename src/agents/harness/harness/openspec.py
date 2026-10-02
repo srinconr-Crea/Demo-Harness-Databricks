@@ -13,9 +13,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
-from .skills import SkillCatalog, checked_file
 
 from .contracts import ClientProfile, RatioSpec, Story, StoryRequest, parse_agent_output
+from .skills import SkillCatalog, checked_file
 
 
 class OpenSpecCLI:
@@ -231,7 +231,7 @@ def propose_client_change(
     revision: int = 0,
     on_artifact: Callable[[str, str, str], None] | None = None,
     profile: ClientProfile | None = None,
-    skill_catalog=None, base_sha=None, on_snapshot=None,
+    skill_catalog=None, base_sha=None, on_snapshot=None, context_manager=None,
 ) -> PlanResult:
     """Generate or revise the four schema artifacts with fixed paths and strict validation."""
     if re.fullmatch(r"[a-z0-9][a-z0-9-]{2,90}", change_id) is None:
@@ -249,7 +249,8 @@ def propose_client_change(
     hashes: dict[str, str] = {}
     metadata = {}
     from .repo_context import RepoContext, contextual_answer
-    repo_context = RepoContext(root, profile) if profile else None
+    repo_context = RepoContext(root, profile, cache=context_manager.cache if context_manager else None,
+                               identity=context_manager.identity if context_manager else None) if profile else None
     for artifact, suffix in output_names.items():
         instructions = instruction_context(cli, root, change_id, artifact, profile)
         if instructions.get("schemaName") != "spec-driven" or Path(instructions.get("changeDir", "")).resolve() != change_root.resolve():
@@ -265,9 +266,9 @@ def propose_client_change(
             "client_context": instructions.get("context"),
             "rules": instructions.get("rules"),
             "story": story.model_dump(),
-            "source_summary": source_summary[:12000],
+            "source_summary": source_summary if context_manager else source_summary[:12000],
             "feedback": feedback,
-            "existing_artifact": target.read_text(encoding="utf-8")[:50000] if target.is_file() else None,
+            "existing_artifact": (target.read_text(encoding="utf-8") if context_manager else target.read_text(encoding="utf-8")[:50000]) if target.is_file() else None,
             "output_path": suffix,
             "response_format": {"content": "texto Markdown completo del artefacto",
                 "summary": "Objetivo, comportamiento esperado y cambios previstos en español",
@@ -283,7 +284,8 @@ def propose_client_change(
         else:
             prompt['openspec_instructions'] = instructions
         parsed = contextual_answer(models, 'planner', prompt, repo_context,
-            stage='updating' if feedback else 'proposing', revision=revision, max_tokens=6000, **extras)
+            stage='updating' if feedback else 'proposing', revision=revision, max_tokens=6000,
+            context_manager=context_manager, phase='update' if feedback else 'propose', **extras)
         if not isinstance(parsed, dict) or not isinstance(parsed.get("content"), str) or not 20 <= len(parsed["content"]) <= 50000:
             raise ValueError("El planner devolvió un artefacto OpenSpec inválido")
         content = parsed["content"].strip() + "\n"

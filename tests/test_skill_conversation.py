@@ -1,9 +1,11 @@
 import json
+
 import pytest
 from harness.contracts import StoryRequest
 from harness.openspec import OpenSpecCLI
 from openspec_helpers import prepare_manual
-from test_conversation import make_engine, git, FakeModels
+from test_conversation import FakeModels, git, make_engine
+
 
 def test_missing_skill_blocks_before_model_and_can_cancel(tmp_path):
     engine, github, models, store, _, _ = make_engine(tmp_path)
@@ -43,8 +45,11 @@ def test_recovery_blocks_tampered_skill_and_legacy_can_restart(tmp_path):
     engine.act(run_id, 'cancel', actor='ana', expected_revision=0, key='cancel-legacy')
     assert store.load(run_id)['state'] == 'cancelled'
 
-def test_real_cli_skills_complete_automatic_conversation(tmp_path):
+@pytest.mark.parametrize('context_enabled', [False, True])
+def test_real_cli_skills_complete_automatic_conversation(tmp_path, context_enabled):
     engine, github, _, store, _, _ = make_engine(tmp_path)
+    from harness.contracts import ContextPolicy
+    engine.context_policy = ContextPolicy(enabled=context_enabled)
     prepare_manual(github.source)
     git('add', '.', cwd=github.source); git('commit', '-m', 'manual skills preparation', cwd=github.source)
     github.sha = git('rev-parse', 'HEAD', cwd=github.source)
@@ -82,7 +87,7 @@ def test_real_cli_skills_complete_automatic_conversation(tmp_path):
     plan = store.load(run_id)['attempts'][-1]
     from harness.conversation import ConversationEngine
     engine = ConversationEngine(engine.profile, store, engine.coordinator, engine.github_factory,
-                                engine.models_factory, engine.cli, tests)
+                                engine.models_factory, engine.cli, tests, context_policy=engine.context_policy)
     engine.act(run_id, 'approve', actor='ana', expected_revision=plan['revision'],
                expected_hash=plan['context']['plan_hash'], key='approve')
     invalidated = store.load(run_id)['attempts'][-1]

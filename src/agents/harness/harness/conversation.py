@@ -14,20 +14,28 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .checkout import GitCheckout, restore_checkpoint, snapshot_changes
+from .client_config import profile_bytes, provenance
+from .context_manager import (
+    ContextManager,
+    DecisionConflict,
+    SourceCache,
+    load_context_policy,
+)
 from .contracts import RunAttempt, RunContract, Story, StoryRequest
-from .client_config import provenance, profile_bytes
 from .models import ModelInvocationError, sanitize_log_value
 from .openspec import (
     OpenSpecCLI,
+    exploration_context,
+    instruction_context,
     mark_tasks_complete,
     prepare_client_workspace,
     propose_client_change,
 )
 from .patch import FileOperation, apply_file_operations
+from .prompt_contracts import PromptContracts
 from .repo_context import ContextResponseError, RepoContext, contextual_answer
-from .skills import SkillCatalog
-from .openspec import instruction_context, exploration_context
 from .repository_policy import safe_target
+from .skills import SkillCatalog, digest
 from .strategies import get_editor
 
 _WAITS = {"awaiting_clarification", "awaiting_plan_review", "awaiting_diff_review"}
@@ -103,7 +111,7 @@ def _diff(root: Path, base_sha: str, files: dict[str, bytes | None]) -> str:
 
 class ConversationEngine:
     def __init__(self, profile, store, coordinator, github_factory, models_factory,
-                 cli: OpenSpecCLI, test_runner, *, publication_mode='approved_plan'):
+                 cli: OpenSpecCLI, test_runner, *, publication_mode='approved_plan', context_policy=None):
         self.profile = profile
         self.store = store
         self.coordinator = coordinator
@@ -114,6 +122,23 @@ class ConversationEngine:
         if publication_mode not in {'approved_plan', 'diff_review'}:
             raise ValueError('Modalidad de publicación inválida')
         self.publication_mode = publication_mode
+        self.context_policy = context_policy or load_context_policy()
+        self._context_caches = {}
+
+    def _context_settings(self):
+        return {'engine': self.context_policy.version,
+                'policy_sha256': digest(self.context_policy.model_dump()),
+                'catalog_sha256': PromptContracts().sha256}
+
+    def context_matches(self, record):
+        pinned = record['attempts'][-1].get('context', {}).get('context_management')
+        return pinned is None or pinned == self._context_settings()
+
+    def _new_context(self):
+        state = {'instruction_engine': 'client-skills-v1'}
+        if self.context_policy.enabled:
+            state['context_management'] = self._context_settings()
+        return state
 
     def _save(self, record: dict) -> None:
         self.store.save(record["run_id"], RunContract.model_validate(record).model_dump(mode="json"))
@@ -137,6 +162,8 @@ class ConversationEngine:
         ref = record['attempts'][-1]['profile_provenance']
         if self.store.load_profile_snapshot(ref['snapshot_sha256']) != profile_bytes(self.profile):
             raise ValueError('El snapshot del perfil no coincide')
+        if not self.context_matches(record):
+            raise ValueError('Política/prompts de contexto incompatibles; requiere retry humano')
 
     def submit(self, story: StoryRequest, *, actor: str) -> str:
         if not actor:
@@ -149,7 +176,7 @@ class ConversationEngine:
             attempt_id=attempt_id, state="queued", stage="exploring",
             profile_provenance=self._profile_ref(),
             publication_mode=self.publication_mode,
-            context={'instruction_engine': 'client-skills-v1'},
+            context=self._new_context(),
             queued_at=timestamp, messages=[{"kind": "story", "actor": actor, "text": story.description, "at": timestamp}],
         )
         record = RunContract(
@@ -189,7 +216,8 @@ class ConversationEngine:
         old = record['attempts'][-1]
         if record.get('repository') != self.profile.repository:
             raise ValueError('El repositorio del intento no corresponde a esta instalación')
-        if old.get('context', {}).get('instruction_engine') == 'client-skills-v1' and self.profile_matches(record):
+        if (old.get('context', {}).get('instruction_engine') == 'client-skills-v1'
+                and self.profile_matches(record) and self.context_matches(record)):
             return
         if old.get('publication', {}).get('pr_url'):
             raise ValueError('El intento ya tiene un PR; revisar publicación existente')
@@ -197,8 +225,11 @@ class ConversationEngine:
         attempt = RunAttempt(attempt_id=identifier, state='queued', stage='exploring',
             profile_provenance=self._profile_ref(),
             publication_mode=old.get('publication_mode', 'diff_review'), queued_at=_now(),
-            context={'instruction_engine': 'client-skills-v1', 'previous_attempt_id': old['attempt_id']},
-            messages=list(old.get('messages', [])[:1])).model_dump(mode='json')
+            context={**self._new_context(), 'previous_attempt_id': old['attempt_id']},
+            messages=[m for m in old.get('messages', []) if m.get('kind') in {'story', 'clarification', 'change'}]).model_dump(mode='json')
+        clarifications = [m['text'] for m in attempt['messages'] if m.get('kind') == 'clarification']
+        if clarifications:
+            attempt['context'].update(clarifications=clarifications, clarification='\n'.join(clarifications))
         record['attempts'].append(attempt)
         record['attempt_id'], record['state'] = identifier, 'queued'
         self.coordinator.create(run_id, identifier, 'exploring')
@@ -313,7 +344,12 @@ class ConversationEngine:
                         attempt["context"].pop("candidate_hash", None)
                         attempt["context"].pop("diff_sha256", None)
                     attempt["base_sha"] = base_sha
-                    next_stage = self._step(root, record, attempt, github, models, action)
+                    try:
+                        next_stage = self._step(root, record, attempt, github, models, action)
+                    except DecisionConflict:
+                        attempt['context']['questions'] = ['Hay decisiones incompatibles: aclara cuál sustituye a cuál y su alcance.']
+                        self._event(attempt, 'context_conflict', questions=attempt['context']['questions'])
+                        next_stage = 'awaiting_clarification'
                     attempt["stage"] = next_stage
                     attempt["state"] = self._state(next_stage)
                     if action:
@@ -373,6 +409,38 @@ class ConversationEngine:
             return 'cancelled'
         catalog = SkillCatalog(root, self.profile, self.cli.version())
         snapshot = lambda value: self.store.save_instruction_snapshot(record['run_id'], attempt['attempt_id'], value)
+        manager = None
+        if context.get('context_management'):
+            previous = None
+            ref = context.get('memory_sha256')
+            if ref:
+                try:
+                    previous = self.store.load_context_snapshot(record['run_id'], attempt['attempt_id'], ref)
+                except (ValueError, FileNotFoundError):
+                    self._event(attempt, 'context_rebuilt', reason='invalid_derivation')
+            identity = {'run_id': record['run_id'], 'attempt_id': attempt['attempt_id'],
+                        'repository': self.profile.repository, 'profile_sha256': self.profile_identity['sha256'],
+                        'base_sha': attempt['base_sha'], 'revision': revision, 'stage': stage,
+                        'checkpoint_id': attempt.get('checkpoint_id')}
+            key = (record['run_id'], attempt['attempt_id'])
+            if key not in self._context_caches:
+                if len(self._context_caches) >= 100:
+                    self._context_caches.pop(next(iter(self._context_caches)))
+                self._context_caches[key] = SourceCache(self.context_policy)
+
+            def context_event(metadata):
+                context['context_snapshot_sha256'] = metadata['snapshot_sha256']
+                context['memory_sha256'] = self.store.save_context_snapshot(record['run_id'], attempt['attempt_id'], manager.memory_snapshot())
+                self._event(attempt, 'context_selection', **metadata)
+
+            manager = ContextManager(root, self.profile, self.context_policy, identity,
+                attempt['messages'], context.get('questions', []), cache=self._context_caches[key], previous=previous,
+                on_snapshot=lambda value: self.store.save_context_snapshot(record['run_id'], attempt['attempt_id'], value),
+                on_event=context_event)
+
+        def repository_context():
+            return RepoContext(root, self.profile, cache=manager.cache if manager else None,
+                               identity=manager.identity if manager else None)
 
         def answer(role, phase, prompt, *, instructions=None, repo_context=None, approved_hash=None):
             payload, extras = catalog.compose(phase, prompt, instructions=instructions,
@@ -380,14 +448,15 @@ class ConversationEngine:
             provenance = extras['instruction_provenance']
             self._event(attempt, 'instructions', **provenance)
             return contextual_answer(models, role, payload, repo_context, stage=stage,
-                revision=revision, approved_sha256=approved_hash, **extras)
+                revision=revision, approved_sha256=approved_hash, context_manager=manager, phase=phase, **extras)
         if stage == "exploring":
             result = answer("explorer", 'explore', {
                 "task": "Explorar la HU, resumirla y preguntar solo lo necesario. JSON: summary, questions[]",
                 "story": story.model_dump(), "source_summary": _source_summary(root, self.profile),
                 "policy": self.profile.model_dump(),
                 "clarifications": context.get('clarifications', []),
-            }, instructions=exploration_context(self.cli, root, self.profile), repo_context=RepoContext(root, self.profile))
+                'source_summary_truncated': True,
+            }, instructions=exploration_context(self.cli, root, self.profile), repo_context=repository_context())
             questions = result.get("questions")
             if not isinstance(result.get("summary"), str) or not isinstance(questions, list) or any(not isinstance(question, str) for question in questions) or len(questions) > 5:
                 raise ValueError("Explore devolvió un contrato inválido")
@@ -402,7 +471,7 @@ class ConversationEngine:
             if action["kind"] == "cancel":
                 self._event(attempt, "cancel", actor=action["actor"])
                 return "cancelled"
-            attempt["messages"].append({"kind": "clarification", "actor": action["actor"], "text": action["text"], "at": _now()})
+            attempt["messages"].append({"kind": "clarification", "actor": action["actor"], "text": action["text"], "at": _now(), 'revision': revision})
             context.setdefault('clarifications', []).append(action['text'])
             context['clarification'] = '\n'.join(context['clarifications'])
             self._event(attempt, "clarification", actor=action["actor"])
@@ -421,6 +490,7 @@ class ConversationEngine:
                 revision=revision + 1,
                 profile=self.profile,
                 skill_catalog=catalog, base_sha=attempt['base_sha'], on_snapshot=snapshot,
+                context_manager=manager,
                 on_artifact=lambda path, content, digest: self._save_artifact(record, attempt, path, content, digest),
             )
             attempt["revision"] += 1
@@ -437,6 +507,7 @@ class ConversationEngine:
                 return "cancelled"
             if action["kind"] == "changes":
                 context["feedback"] = action["text"]
+                attempt['messages'].append({'kind': 'change', 'actor': action['actor'], 'text': action['text'], 'at': _now(), 'revision': revision})
                 self._event(attempt, "plan_changes", actor=action["actor"], text=action["text"])
                 return "updating"
             attempt.setdefault("approvals", []).append({"kind": "plan", "revision": revision,
@@ -457,11 +528,13 @@ class ConversationEngine:
                 proposal = answer("developer", 'apply', {
                     "task": "Aplicar las tareas aprobadas. Responder JSON operations[] con op/path/content/expected_sha256 y notes.",
                     "story": story.model_dump(), "artifacts": artifacts,
-                    "source_summary": _source_summary(root, self.profile),
+                    "source_summary": (json.dumps([repository_context().request({'op': 'read_file', 'path': item['path']})
+                        for item in context['plan_metadata']['manifest'] if item['op'] != 'create'], ensure_ascii=False)
+                        if manager else _source_summary(root, self.profile)),
                     "allowed_paths": self.profile.general_patch.allowed_paths,
                     "policy": self.profile.model_dump(),
                     'approved_manifest': context['plan_metadata']['manifest'],
-                }, instructions=apply_context, approved_hash=approved["sha256"], repo_context=RepoContext(root, self.profile))
+                }, instructions=apply_context, approved_hash=approved["sha256"], repo_context=repository_context())
                 raw = proposal.get("operations")
                 if not isinstance(raw, list):
                     raise ValueError("El desarrollador no devolvió operaciones tipadas")
@@ -502,11 +575,12 @@ class ConversationEngine:
                 "test_evidence": evidence, "diff": diff,
             }, instructions=self.cli.status(root, context['change_id']), approved_hash=context["plan_hash"])
             try:
-                independent = _json_answer(models, 'verifier', {
+                independent = contextual_answer(models, 'verifier', {
                     'task': 'Revisión asesora independiente. JSON approved, findings[]. Nunca decide la publicación.',
                     'story': story.model_dump(), 'test_evidence': evidence, 'diff': diff[:20000],
                     'diff_truncated': len(diff) > 20000,
-                }, stage=stage, revision=revision, approved_hash=context['plan_hash'])
+                }, stage=stage, revision=revision, approved_sha256=context['plan_hash'],
+                    context_manager=manager, phase='verify')
                 if not isinstance(independent.get('approved'), bool) or not isinstance(independent.get('findings'), list):
                     raise ContextResponseError('Contrato de asesor inválido')
                 context['advisory'] = {'status': 'complete', **independent}
@@ -565,6 +639,7 @@ class ConversationEngine:
                 return "cancelled"
             if action["kind"] == "changes":
                 context["feedback"] = action["text"]
+                attempt['messages'].append({'kind': 'change', 'actor': action['actor'], 'text': action['text'], 'at': _now(), 'revision': revision})
                 context["restore_prearchive"] = True
                 self._event(attempt, "diff_changes", actor=action["actor"], text=action["text"])
                 return "updating"
@@ -589,7 +664,7 @@ class ConversationEngine:
                 attempt["base_sha"] = remote_sha
                 attempt["revision"] += 1
                 attempt["openspec"] = {}
-                attempt["context"] = {'instruction_engine': 'client-skills-v1'}
+                attempt["context"] = self._new_context()
                 self._event(attempt, "base_advanced", new_base_sha=remote_sha)
                 return "exploring"
             branch = f"feature/{re.sub(r'[^a-z0-9-]+', '-', story.hu.lower()).strip('-')[:60]}-{attempt['attempt_id'][:8]}"

@@ -210,7 +210,7 @@ def create_conversation_app(engine, profile) -> FastAPI:
         legacy = attempt.get('context', {}).get('instruction_engine') != 'client-skills-v1'
         if record.get('repository') != profile.repository:
             raise HTTPException(status_code=409, detail='El repositorio no corresponde a esta instalación')
-        legacy = legacy or not engine.profile_matches(record)
+        legacy = legacy or not engine.profile_matches(record) or not engine.context_matches(record)
         if (record["state"] not in {"queued", "running", "awaiting_plan_review", "awaiting_clarification", "awaiting_diff_review"}
                 or attempt["revision"] != payload.expected_revision
                 or (not legacy and (record['state'] not in {'queued', 'running'} or not timeline or timeline[-1]['kind'] != 'error'))):

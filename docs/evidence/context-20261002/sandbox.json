@@ -1,0 +1,20 @@
+[
+  {
+    "case": "positive-and-clean-environment",
+    "passed": true,
+    "evidence": [
+      "..                                                                       [100%]\n2 passed in 0.01s\n\n"
+    ],
+    "job_run_id": 953412753433157,
+    "archive_sha256": "310ef6d0cdac2ad22806310ccd6aed2ae0fd2df615f605e2e67df2c67422ed77"
+  },
+  {
+    "case": "negative-is-not-approved",
+    "passed": false,
+    "evidence": [
+      "F                                                                        [100%]\n=================================== FAILURES ===================================\n____________________________ test_expected_failure _____________________________\n\n    def test_expected_failure():\n>       assert False, 'synthetic negative case'\nE       AssertionError: synthetic negative case\nE       assert False\n\ntests/test_synthetic.py:2: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_synthetic.py::test_expected_failure - AssertionError: synth...\n1 failed in 0.02s\n\n"
+    ],
+    "job_run_id": 610792323143424,
+    "archive_sha256": "b5c6e8a7305e1aee641072b5ab625d2be66f63c12891c7b87e6dd5afa1f4485f"
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "path": "/",
+    "status": 200,
+    "content_type": "text/html; charset=utf-8"
+  },
+  {
+    "path": "/configuration",
+    "status": 200,
+    "content_type": "application/json",
+    "configuration_keys": [
+      "profile",
+      "strategies",
+      "ui"
+    ]
+  }
+]

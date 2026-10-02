@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import io
 import hashlib
+import io
 import json
 import os
 import re
@@ -22,6 +22,24 @@ def _checkpoint_path(path: str) -> None:
 
 
 class _CheckpointStore:
+    def save_context_snapshot(self, run_id, attempt_id, snapshot):
+        _safe_key(run_id, attempt_id)
+        data = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+        if len(data) > 2097152:
+            raise ValueError('Snapshot de contexto excedido')
+        digest = hashlib.sha256(data).hexdigest()
+        self._write_checkpoint_file(f'context/{run_id}/{attempt_id}/{digest}.json', data)
+        return digest
+
+    def load_context_snapshot(self, run_id, attempt_id, digest):
+        _safe_key(run_id, attempt_id, digest)
+        if re.fullmatch(r'[a-f0-9]{64}', digest) is None:
+            raise ValueError('Referencia de contexto inválida')
+        data = self._read_checkpoint_file(f'context/{run_id}/{attempt_id}/{digest}.json')
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise ValueError('Integridad de contexto inválida')
+        return json.loads(data)
+
     def save_profile_snapshot(self, data: bytes) -> str:
         if len(data) > 131072:
             raise ValueError('Perfil excedido')

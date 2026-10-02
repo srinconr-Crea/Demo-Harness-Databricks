@@ -15,13 +15,13 @@ from databricks.sdk.core import ApiClient, Config
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from harness.client_config import load_selected_profile
 from harness.contracts import (
     AgentCallContract,
     RatioSpec,
     parse_agent_output,
 )
 from harness.conversation import ConversationEngine
-from harness.client_config import load_selected_profile
 from harness.conversation_webapp import create_conversation_app
 from harness.coordination import DeltaRunCoordinator, SqliteRunCoordinator
 from harness.github import GitHubAppClient
@@ -84,6 +84,7 @@ def models_factory(run_id: str, attempt_id: str):
             stage=response.stage, revision=response.revision,
             approved_sha256=response.approved_sha256,
             instruction_provenance=response.instruction_provenance,
+            context_provenance=response.context_provenance,
             profile_provenance=next(a for a in record['attempts'] if a['attempt_id'] == attempt_id).get('profile_provenance'),
             input_text=response.input_text, output_text=response.output_text,
             input_sha256=response.input_sha256, output_sha256=response.output_sha256,

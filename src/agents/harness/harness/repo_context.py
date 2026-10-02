@@ -14,11 +14,31 @@ class ContextResponseError(ValueError):
 
 
 class RepoContext:
-    def __init__(self, root: Path, profile):
+    def __init__(self, root: Path, profile, *, cache=None, identity=None):
         self.root, self.profile = root, profile
         self.policy = profile.repository_policy
         self.reads = self.searches = self.used = self.requests = 0
         self.deadline = time.monotonic() + self.policy.timeout_seconds
+        self.cache, self.identity = cache, identity
+
+    def fingerprint(self, request):
+        from .prompt_contracts import validate_request
+        from .skills import digest
+        validate_request(request)
+        if request['op'] == 'read_file':
+            item = self._read(request['path'])
+            state = item.get('sha256', item)
+        else:
+            # Inventory includes contents, so new/deleted files and modified matches invalidate search.
+            state = []
+            for relative in self._files():
+                target = safe_target(self.root, relative)
+                if target.stat().st_size <= self.policy.max_file_bytes:
+                    checksum = hashlib.sha256(target.read_bytes()).hexdigest()
+                else:
+                    checksum = (target.stat().st_size, target.stat().st_mtime_ns)
+                state.append((relative, checksum))
+        return digest([self.identity, request, state])
 
     def _files(self):
         count = 0
@@ -63,6 +83,31 @@ class RepoContext:
         }
 
     def request(self, request):
+        from .prompt_contracts import validate_request
+        validate_request(request)
+        key = self.fingerprint(request) if self.cache else None
+        if self.cache:
+            from .skills import digest
+            self.cache.bind(digest([self.identity, request]), key)
+        cached = self.cache.get(key) if self.cache else None
+        if cached is not None:
+            self.requests += 1
+            self.reads += request['op'] == 'read_file'
+            self.searches += request['op'] == 'search_text'
+            if (self.requests > self.policy.max_rounds or self.reads > self.policy.max_reads
+                    or self.searches > self.policy.max_searches or time.monotonic() > self.deadline):
+                raise ValueError('Límite de contexto')
+            size = len(json.dumps(cached, ensure_ascii=False).encode('utf-8'))
+            if self.used + size > self.policy.max_context_bytes:
+                return {'truncated': True, 'reason': 'max_context_bytes'}
+            self.used += size
+            return cached
+        result = self._request(request)
+        if self.cache:
+            self.cache.put(key, result)
+        return result
+
+    def _request(self, request):
         self.requests += 1
         if self.requests > self.policy.max_rounds or time.monotonic() > self.deadline:
             raise ValueError("Límite de rondas o tiempo del contexto")
@@ -87,7 +132,7 @@ class RepoContext:
             for relative in self._files():
                 try:
                     item = self._read(relative)
-                except UnicodeDecodeError:
+                except (UnicodeDecodeError, ValueError):
                     continue
                 for n, line in enumerate(item.get("content", "").splitlines(), 1):
                     if query in line:
@@ -114,7 +159,7 @@ class RepoContext:
 
 
 def contextual_answer(
-    models, role, prompt: dict, context: RepoContext | None = None, **kwargs
+    models, role, prompt: dict, context: RepoContext | None = None, *, context_manager=None, phase=None, **kwargs
 ):
     payload = dict(prompt)
     max_prompt_bytes = kwargs.pop('max_prompt_bytes', None)
@@ -126,8 +171,13 @@ def contextual_answer(
     limit = context.policy.max_rounds if context else 1
     history = []
     for _ in range(limit):
-        serialized = json.dumps({**payload, "context_history": history}, ensure_ascii=False)
-        if max_prompt_bytes and len(serialized.encode('utf-8')) > max_prompt_bytes:
+        if context_manager:
+            serialized, system, metadata = context_manager.prepare(role, phase, payload, history, context,
+                max_bytes=max_prompt_bytes, max_tokens=kwargs.get('max_tokens', getattr(models, 'max_tokens', 0)))
+            kwargs.update(system_prompt=system, context_provenance=metadata)
+        else:
+            serialized = json.dumps({**payload, "context_history": history}, ensure_ascii=False)
+        if not context_manager and max_prompt_bytes and len(serialized.encode('utf-8')) > max_prompt_bytes:
             raise ValueError('El prompt OpenSpec excede el presupuesto; no se truncaron instrucciones')
         response = models.complete(
             role,
@@ -147,14 +197,28 @@ def contextual_answer(
             raise ContextResponseError(f"El rol {role} devolvió un contrato inválido")
         request = value.get("context_request")
         if request is None:
+            if context_manager:
+                try:
+                    context_manager.validate(role, value, payload)
+                except ValueError as error:
+                    raise ContextResponseError(str(error)) from error
             return value
         if not context or not isinstance(request, dict):
             raise ValueError("Solicitud de contexto inválida")
         try:
+            if context_manager and set(value) != {'context_request'}:
+                raise ValueError('Campos de solicitud de contexto inválidos')
             result = context.request(request)
+            fingerprint = context.fingerprint(request) if context_manager else None
+            if context_manager and result.get('content') and result.get('sha256') and not result.get('truncated'):
+                context_manager.observe_fact(result['path'], result['content'], result['sha256'])
         except (ValueError, UnicodeDecodeError):
             result = {
                 "error": "Solicitud rechazada por política, formato o presupuesto"
             }
-        history.append({"request": request, "result": result})
+            fingerprint = None
+        item = {"request": request, "result": result}
+        if context_manager:
+            item['fingerprint'] = fingerprint
+        history.append(item)
     raise ValueError("El modelo agotó las rondas de contexto sin contrato final")

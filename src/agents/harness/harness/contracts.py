@@ -14,11 +14,11 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    PrivateAttr,
     StrictBool,
     ValidationError,
     field_validator,
     model_validator,
-    PrivateAttr,
 )
 
 
@@ -275,6 +275,7 @@ class AgentCallContract(BaseModel):
     approved_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     instruction_provenance: dict | None = None
     profile_provenance: dict | None = None
+    context_provenance: dict | None = None
     model: str
     status: Literal["complete", "failed"] = "complete"
     input_text: str | None = None
@@ -336,6 +337,76 @@ def parse_agent_output(role: str, response: str) -> dict:
         return _ROLE_OUTPUTS[role].model_validate(value).model_dump()
     except (json.JSONDecodeError, ValidationError, TypeError) as error:
         raise ValueError(f"Salida no válida del rol {role}") from error
+
+
+class ContextPolicy(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True, frozen=True)
+    enabled: bool = False
+    version: Literal['deterministic-context-v1'] = 'deterministic-context-v1'
+    max_input_tokens: int = Field(default=524288, ge=1024, le=2097152)
+    output_reserve_tokens: int = Field(default=12000, ge=1, le=100000)
+    max_prompt_bytes: int = Field(default=524288, ge=1024, le=2097152)
+    cache_ttl_seconds: int = Field(default=300, ge=1, le=86400)
+    cache_max_bytes: int = Field(default=1048576, ge=1024, le=10485760)
+    cache_max_entries: int = Field(default=100, ge=1, le=1000)
+
+    @model_validator(mode='after')
+    def reserve_fits(self):
+        if self.output_reserve_tokens >= self.max_input_tokens:
+            raise ValueError('La reserva debe caber en el presupuesto')
+        return self
+
+
+class DecisionRecord(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    id: str
+    kind: Literal['clarification', 'change', 'fact', 'interpretation']
+    text: str = Field(min_length=1, max_length=10000)
+    scope: str
+    run_id: str
+    attempt_id: str
+    revision: int = Field(ge=0)
+    origin_ref: str
+    evidence_sha256: str = Field(pattern=r'^[a-f0-9]{64}$')
+    actor: str | None = None
+    status: Literal['proposed', 'confirmed', 'superseded', 'conflict', 'stale']
+    supersedes: str | None = None
+    key: str | None = None
+    value: str | None = None
+
+
+class SelectionRecord(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    role: str
+    phase: str
+    included: list[str]
+    excluded: list[dict]
+    reason: str
+    bytes_before: int = Field(ge=0)
+    bytes_after: int = Field(ge=0)
+    estimated_input_tokens: int = Field(ge=0)
+    output_reserve_tokens: int = Field(ge=1)
+    cache: dict
+
+
+class ContextEnvelope(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    version: Literal['deterministic-context-v1'] = 'deterministic-context-v1'
+    run_id: str
+    attempt_id: str
+    repository: str
+    profile_sha256: str = Field(pattern=r'^[a-f0-9]{64}$')
+    base_sha: str = Field(pattern=r'^[a-f0-9]{40}$')
+    revision: int = Field(ge=0)
+    stage: str
+    role: str
+    checkpoint_id: str | None
+    policy_sha256: str = Field(pattern=r'^[a-f0-9]{64}$')
+    prompt_sha256: str = Field(pattern=r'^[a-f0-9]{64}$')
+    sources: list[dict]
+    decisions: list[DecisionRecord]
+    questions: list[str]
+    selection: SelectionRecord
 
 
 class OpenSpecSkillPolicy(BaseModel):

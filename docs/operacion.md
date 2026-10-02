@@ -85,6 +85,11 @@ Los cambios en `databricks.yml` o `resources/` activan obligatoriamente `bundle 
 
 ## Registros, costos y retención
 
+La [guía de gestión de contexto](gestion-contexto.md) define contratos por rol,
+selección, cache, vigencia de decisiones, presupuesto, activación y rollback.
+La política del producto está deshabilitada por defecto; una instalación verificada
+puede habilitarla para intentos nuevos. Los históricos conservan su modalidad.
+
 `runs/<run_id>.json` usa contrato v5; `attempts[]` conserva etapa, revisión, SHA base, mensajes, eventos, aprobaciones, publicación y checkpoint. `runs/agent_calls/<run_id>-<call_id>.json` usa contrato v3; contiene `run_id`, `attempt_id`, rol, etapa, revisión, modelo, estado, tiempos, tokens y `estimated_cost_usd` cuando existe `usage`. Una llamada fallida o sin `usage` tiene costo ausente, no cero. Los registros v3 de ejecución y v2 de llamadas siguen legibles para consultas históricas. [harness_costs_by_call.sql](sql/harness_costs_by_call.sql) une ejecución y llamadas por **ambos** `run_id` y `attempt_id`; `call_id` identifica cada invocación. Los precios YAML son supuestos, no facturación real.
 
 Los artefactos redactados viven en `runs/openspec/`; los checkpoints de bytes exactos y diffs de revisión se almacenan por separado en el volumen UC. El operador debe restringir `READ_VOLUME` y `WRITE_VOLUME` a las identidades autorizadas, definir retención y borrado según la política del cliente, y conservar checkpoints de intentos activos y PR pendientes. Un registro histórico puede consultarse sin migrarlo; la coordinación nueva comienza en la tabla Delta. Si el JSON y la tabla divergen, la recuperación usa el checkpoint cuyo identificador coincide con la tabla y rechaza contenido alterado. Nunca borrar manualmente un checkpoint activo para resolver un error.
