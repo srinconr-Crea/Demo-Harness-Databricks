@@ -127,3 +127,30 @@ puede habilitarla para intentos nuevos. Los históricos conservan su modalidad.
 `runs/<run_id>.json` usa contrato v5; `attempts[]` conserva etapa, revisión, SHA base, mensajes, eventos, aprobaciones, publicación y checkpoint. `runs/agent_calls/<run_id>-<call_id>.json` usa contrato v3; contiene `run_id`, `attempt_id`, rol, etapa, revisión, modelo, estado, tiempos, tokens y `estimated_cost_usd` cuando existe `usage`. Una llamada fallida o sin `usage` tiene costo ausente, no cero. Los registros v3 de ejecución y v2 de llamadas siguen legibles para consultas históricas. [harness_costs_by_call.sql](sql/harness_costs_by_call.sql) une ejecución y llamadas por **ambos** `run_id` y `attempt_id`; `call_id` identifica cada invocación. Los precios YAML son supuestos, no facturación real.
 
 Los artefactos redactados viven en `runs/openspec/`; los checkpoints de bytes exactos y diffs de revisión se almacenan por separado en el volumen UC. El operador debe restringir `READ_VOLUME` y `WRITE_VOLUME` a las identidades autorizadas, definir retención y borrado según la política del cliente, y conservar checkpoints de intentos activos y PR pendientes. Un registro histórico puede consultarse sin migrarlo; la coordinación nueva comienza en la tabla Delta. Si el JSON y la tabla divergen, la recuperación usa el checkpoint cuyo identificador coincide con la tabla y rechaza contenido alterado. Nunca borrar manualmente un checkpoint activo para resolver un error.
+## Contrato del planner y representación de artefactos
+
+En proposal de `general_patch`, `manifest` contiene exclusivamente operaciones de
+código y pruebas admitidas por el perfil. Las rutas OpenSpec se describen en el
+impacto de la propuesta y las gestiona el harness durante planificación, sync y
+archive; no se incluyen como operaciones del desarrollador. Specs, design y
+tasks reciben su contrato de contenido sin heredar campos obligatorios de
+proposal. La estrategia acotada conserva su propio contrato.
+
+`content` se serializa una sola vez dentro del JSON externo. Por ejemplo,
+`{"content":"## Why\n\nMotivo.\n\n## Impact\nCódigo y pruebas."}` produce un documento
+con saltos reales después de interpretar JSON. Una segunda serialización deja
+separadores literales y no cumple la estructura Markdown. El harness comprueba
+la estructura requerida antes de guardar el artefacto, preserva escapes
+legítimos dentro de ejemplos y mantiene la validación OpenSpec estricta del plan.
+El schema JSON verifica forma de salida, no permisos ni validez del documento.
+
+Un error de manifiesto identifica el artefacto, índice de entrada y restricción,
+por ejemplo `proposal, entrada 3: OpenSpec se gestiona fuera del manifiesto de
+código`. Las rutas recibidas del modelo permanecen en la respuesta protegida;
+el error público no reproduce arbitrariamente esas cadenas. Un defecto del
+documento identifica el artefacto y su representación o estructura requerida.
+Ambos se clasifican como `invalid_contract`: no se filtran operaciones ni se
+reinterpreta el texto para aparentar éxito, y no generan otra llamada automática.
+Los errores históricos conservan su mensaje original. La consulta de llamadas
+permite localizar `call_id` y `response_evidence_sha256` para revisar el original
+con los permisos existentes. Los presupuestos y reglas de retry no cambian.

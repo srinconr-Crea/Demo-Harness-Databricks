@@ -273,6 +273,7 @@ def propose_client_change(
     hashes: dict[str, str] = {}
     metadata = {}
     from .repo_context import RepoContext, contextual_answer
+    from .prompt_contracts import planner_artifact_output, validate_artifact_content, validate_planner_manifest
     repo_context = RepoContext(root, profile, cache=context_manager.cache if context_manager else None,
                                identity=context_manager.identity if context_manager else None) if profile else None
     for artifact, suffix in output_names.items():
@@ -294,11 +295,10 @@ def propose_client_change(
             "feedback": feedback,
             "existing_artifact": (target.read_text(encoding="utf-8") if context_manager else target.read_text(encoding="utf-8")[:50000]) if target.is_file() else None,
             "output_path": suffix,
-            "response_format": {"content": "texto Markdown completo del artefacto",
-                "summary": "Objetivo, comportamiento esperado y cambios previstos en español",
-                "manifest": [{'op': 'create|modify|delete', 'path': 'ruta exacta de código prevista'}]},
+            "response_format": planner_artifact_output(artifact, profile),
+            "serialization_example": {'content': '## Sección\n\nTexto del documento con saltos reales.'},
             "policy": profile.model_dump() if profile else None,
-            "approved_manifest_contract": 'Para proposal de general_patch, manifest y summary son obligatorios. No son el diff real. La aprobación autoriza crear el PR automáticamente después de verificar, sincronizar y archivar.',
+            "approved_manifest_contract": 'Solo proposal general_patch requiere summary y manifest: operaciones de código/pruebas dentro del perfil, nunca rutas OpenSpec. El Harness gestiona los artefactos OpenSpec por separado. No son el diff real. La aprobación autoriza el PR después de verificar, sincronizar y archivar.',
         }
         catalog = skill_catalog or (SkillCatalog(root, profile, cli.version()) if profile else None)
         extras = {}
@@ -313,17 +313,14 @@ def propose_client_change(
         if not isinstance(parsed, dict) or not isinstance(parsed.get("content"), str) or not 20 <= len(parsed["content"]) <= 50000:
             raise ValueError("El planner devolvió un artefacto OpenSpec inválido")
         content = parsed["content"].strip() + "\n"
+        validate_artifact_content(parsed['content'], prompt)
         if artifact == 'proposal' and profile:
             if profile.general_patch:
                 manifest, summary = parsed.get('manifest'), parsed.get('summary')
                 policy = profile.general_patch
                 if not isinstance(summary, str) or not 1 <= len(summary) <= 10000 or not isinstance(manifest, list) or not 1 <= len(manifest) <= policy.max_files:
                     raise ValueError('La propuesta requiere resumen y manifiesto explícitos')
-                paths = set()
-                for item in manifest:
-                    if not isinstance(item, dict) or set(item) != {'op', 'path'} or item['op'] not in policy.operations or not isinstance(item['path'], str) or not profile.allows_code(item['path']) or Path(item['path']).suffix not in policy.extensions or item['path'] in paths:
-                        raise ValueError('El manifiesto excede la política del cliente')
-                    paths.add(item['path'])
+                paths = validate_planner_manifest(manifest, profile)
                 from .validation import validation_plan
                 metadata = {'summary': summary, 'manifest': manifest, 'validation_plan': validation_plan(profile, sorted(paths))}
             else:
@@ -391,6 +388,7 @@ def plan_client_change(
             "source_excerpt": source_excerpt,
             "output_path": suffix,
             "response_format": {"content": "texto del artefacto", "strategy": profile.strategy.kind, "code_path": profile.strategy.notebook, "expression": spec.expression},
+            "serialization_contract": 'content es Markdown serializado una sola vez; tras interpretar el JSON debe contener saltos reales. Conserva escapes literales en ejemplos.',
         }, ensure_ascii=False)
         from .repo_context import contextual_answer
         response = contextual_answer(models, 'planner', json.loads(prompt))
@@ -398,6 +396,8 @@ def plan_client_change(
         if response["strategy"] != profile.strategy.kind or response["code_path"] != profile.strategy.notebook or response["expression"] != spec.expression or not profile.allows(response["code_path"]):
             raise ValueError("El manifiesto del planner excede la política validada")
         content = response["content"].strip() + "\n"
+        from .prompt_contracts import validate_artifact_content
+        validate_artifact_content(response['content'], json.loads(prompt))
         path = target.relative_to(root).as_posix()
         if not profile.allows_openspec(path) or not target.resolve().is_relative_to(change_root.resolve()):
             raise ValueError("Ruta de artefacto OpenSpec fuera de política")

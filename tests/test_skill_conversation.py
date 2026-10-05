@@ -68,6 +68,8 @@ def test_real_cli_skills_complete_automatic_conversation(tmp_path, context_enabl
                 if payload['artifact'] == 'specs':
                     value['content'] = value['content'].replace('## ADDED Requirements',
                         '## Purpose\n\nProporcionar una salida sintética verificable para el consumidor del cliente.\n\n## ADDED Requirements')
+                if payload['artifact'] == 'design':
+                    value['content'] += '\n## Goals / Non-Goals\nSalida 2 dentro del perfil.\n\n## Risks / Trade-offs\nPruebas sintéticas.\n'
                 response.text = json.dumps(value)
             return response
     models = Models()

@@ -1,5 +1,6 @@
 """Trusted role prompts and bounded tools. Schemas never replace repository policy."""
 import json
+import re
 from pathlib import Path
 
 import yaml
@@ -9,6 +10,82 @@ from .repository_policy import valid_relative
 from .skills import digest
 
 CATALOG = Path(__file__).resolve().parents[1] / 'config/defaults/prompts.yaml'
+
+
+def validate_planner_manifest(manifest, profile, artifact='proposal'):
+    policy = profile.general_patch
+    if not isinstance(manifest, list) or not 1 <= len(manifest) <= policy.max_files:
+        raise ValueError('La propuesta requiere resumen y manifiesto explícitos')
+    paths = set()
+    for index, item in enumerate(manifest, 1):
+        reason = None
+        if not isinstance(item, dict) or set(item) != {'op', 'path'} or not isinstance(item.get('path'), str):
+            reason = 'campos o tipos inválidos'
+        elif item['op'] not in policy.operations:
+            reason = 'operación no permitida'
+        elif not valid_relative(item['path']):
+            reason = 'ruta relativa inválida'
+        elif profile.allows_openspec(item['path']):
+            reason = 'OpenSpec se gestiona fuera del manifiesto de código'
+        elif not profile.allows_code(item['path']):
+            reason = 'ruta fuera del perfil'
+        elif Path(item['path']).suffix not in policy.extensions:
+            reason = 'extensión no permitida'
+        elif item['path'] in paths:
+            reason = 'ruta duplicada'
+        if reason:
+            # The original path remains in protected response evidence. Do not echo
+            # arbitrary model strings into the public failure message.
+            raise ValueError(f'El manifiesto excede la política del cliente ({artifact}, entrada {index}: {reason})')
+        paths.add(item['path'])
+    return paths
+
+
+def _document_lines(content):
+    lines, fence = [], None
+    for line in content.splitlines():
+        marker = re.match(r'^ {0,3}(`{3,}|~{3,})', line)
+        if marker:
+            token = marker.group(1)
+            if fence is None:
+                fence = token
+            elif token[0] == fence[0] and len(token) >= len(fence) and not line[marker.end():].strip():
+                fence = None
+            continue
+        if fence is None:
+            lines.append(line)
+    return lines
+
+
+def validate_artifact_content(content, payload):
+    artifact = payload.get('artifact')
+    if artifact not in {'proposal', 'specs', 'design', 'tasks'}:
+        return
+    if not isinstance(content, str) or not 20 <= len(content) <= 50000:
+        raise ValueError(f'El planner devolvió un artefacto OpenSpec inválido ({artifact})')
+    lines = _document_lines(content)
+    headings = {m.group(1).strip() for line in lines
+                if (m := re.match(r'^ {0,3}## +(.+?) *#*$', line))}
+    required = {m.group(1).strip() for line in _document_lines(payload.get('template') or '')
+                if '<!--' not in line and (m := re.match(r'^## +(.+?) *#*$', line))}
+    if artifact == 'specs':
+        required = set()
+        valid = bool(headings & {'ADDED Requirements', 'MODIFIED Requirements', 'REMOVED Requirements', 'RENAMED Requirements'})
+    elif artifact == 'tasks':
+        valid = any(re.match(r'^ {0,3}- \[[ xX]\] +\S', line) for line in lines)
+    else:
+        valid = any(re.match(r'^ {0,3}#{1,6} +\S', line) for line in lines)
+    if len(lines) < 2 or not valid or not required <= headings:
+        reason = 'serialización adicional del Markdown' if '\\n' in content and '\n' not in content else 'estructura Markdown requerida ausente'
+        raise ValueError(f'Contrato del artefacto inválido ({artifact}: {reason})')
+
+
+def planner_artifact_output(artifact, profile=None):
+    output = {'content': 'Markdown completo, serializado una sola vez en el JSON externo; tras parsear contiene saltos reales.'}
+    if artifact == 'proposal' and profile and profile.general_patch:
+        output.update(summary='Objetivo y comportamiento previsto en español',
+                      manifest=[{'op': 'create|modify|delete', 'path': 'ruta de código o pruebas permitida; nunca OpenSpec'}])
+    return output
 
 TOOLS = {
     'list_tree': {'arguments': {'op': 'list_tree'},
@@ -69,13 +146,8 @@ def validate_output(role, value, payload, profile):
             if (not isinstance(value.get('summary'), str) or not 1 <= len(value['summary']) <= 10000
                     or not isinstance(manifest, list) or not 1 <= len(manifest) <= profile.general_patch.max_files):
                 raise ValueError('Propuesta requiere manifiesto')
-            paths = set()
-            for item in manifest:
-                if (not isinstance(item, dict) or set(item) != {'op', 'path'} or not isinstance(item['path'], str)
-                        or item['op'] not in profile.general_patch.operations or not profile.allows_code(item['path'])
-                        or Path(item['path']).suffix not in profile.general_patch.extensions or item['path'] in paths):
-                    raise ValueError('Manifiesto fuera de política')
-                paths.add(item['path'])
+            validate_planner_manifest(manifest, profile)
+        validate_artifact_content(value['content'], payload)
     elif role == 'developer':
         if profile.general_patch:
             if set(value) - {'operations', 'notes'} or not isinstance(value.get('operations'), list):
