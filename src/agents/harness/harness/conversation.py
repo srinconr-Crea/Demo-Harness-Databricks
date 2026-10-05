@@ -203,6 +203,7 @@ class ConversationEngine:
             record["attempts"][-1] = recovered
             record["attempts"][-1]["checkpoint_id"] = row["checkpoint_id"]
             record["state"] = self._state(row["stage"])
+            record['finished_at'] = recovered.get('finished_at')
             record["updated_at"] = _now()
             self._save(record)
         elif row and row["stage"] != attempt.get("stage"):
@@ -323,6 +324,7 @@ class ConversationEngine:
                 with tempfile.TemporaryDirectory(prefix="harness-client-run-") as directory:
                     root = Path(directory) / "client"
                     base_sha = attempt.get("base_sha") or github.base_sha(self.profile.base_branch)
+                    attempt['base_sha'] = base_sha
                     github.checkout(root, base_sha)
                     catalog = None if cancelling else prepare_client_workspace(root, self.profile, cli=self.cli)
                     restore_id = (
@@ -344,14 +346,28 @@ class ConversationEngine:
                         attempt["context"].pop("candidate_hash", None)
                         attempt["context"].pop("diff_sha256", None)
                     attempt["base_sha"] = base_sha
+                    step_error = None
                     try:
                         next_stage = self._step(root, record, attempt, github, models, action)
                     except DecisionConflict:
                         attempt['context']['questions'] = ['Hay decisiones incompatibles: aclara cuál sustituye a cuál y su alcance.']
                         self._event(attempt, 'context_conflict', questions=attempt['context']['questions'])
                         next_stage = 'awaiting_clarification'
+                    except (ValueError, RuntimeError, TimeoutError) as error:
+                        step_error = error
+                        category = getattr(error, 'category', 'model_invocation' if isinstance(error, ModelInvocationError)
+                            else 'invalid_contract' if isinstance(error, ValueError) else 'stage_error')
+                        message = sanitize_log_value(str(error), 1000)
+                        self._event(attempt, 'error', message=message, category=category)
+                        attempt['failure'] = {'id': uuid.uuid4().hex, 'category': category,
+                            'failed_stage': stage, 'revision': attempt['revision'],
+                            'retryable': isinstance(error, (ContextResponseError, ModelInvocationError, TimeoutError, RuntimeError))}
+                        attempt['error'] = record['error'] = message
+                        next_stage = 'failed'
                     attempt["stage"] = next_stage
                     attempt["state"] = self._state(next_stage)
+                    if next_stage in _FINAL:
+                        attempt['finished_at'] = record['finished_at'] = _now()
                     if action:
                         attempt.setdefault("context", {}).setdefault("action_keys", []).append(action["key"])
                     if next_stage == "exploring" and attempt.get("base_sha") != base_sha:
@@ -375,13 +391,35 @@ class ConversationEngine:
                     attempt["checkpoint_id"] = checkpoint_id
                     record["state"] = attempt["state"]
                     record["updated_at"] = _now()
-                    if next_stage in _FINAL:
-                        record["finished_at"] = _now()
-                        attempt["finished_at"] = record["finished_at"]
                     self._save(record)
-            except Exception:
+                    if step_error is not None and not isinstance(step_error, ContextResponseError):
+                        raise step_error
+            except Exception as error:
                 # Release a claimed lease on a failed operation. The prior checkpoint
                 # remains canonical and can be retried after an operator correction.
+                current = self.coordinator.get(run_id, attempt['attempt_id'])
+                if (isinstance(error, (ValueError, RuntimeError, TimeoutError))
+                        and current and current['lease_owner'] == owner and current['version'] == claimed['version']):
+                    message = sanitize_log_value(str(error), 1000)
+                    self._event(attempt, 'error', message=message, category='preparation_error')
+                    attempt['failure'] = {'id': uuid.uuid4().hex, 'category': 'preparation_error',
+                        'failed_stage': stage, 'revision': attempt['revision'],
+                        'retryable': bool(attempt.get('base_sha')) and isinstance(error, (RuntimeError, TimeoutError))}
+                    attempt['stage'] = attempt['state'] = record['state'] = 'failed'
+                    attempt['error'] = record['error'] = message
+                    attempt['finished_at'] = record['finished_at'] = record['updated_at'] = _now()
+                    checkpoint_id = previous_checkpoint
+                    if attempt.get('base_sha'):
+                        previous_files = self.store.load_checkpoint(run_id, attempt['attempt_id'], previous_checkpoint)['files'] if previous_checkpoint else {}
+                        checkpoint_id = self.store.save_checkpoint(run_id, attempt['attempt_id'], max(1, attempt['revision']),
+                            attempt['base_sha'], previous_files, metadata={'attempt': attempt})
+                    finished = self.coordinator.finish(run_id, attempt['attempt_id'], expected_version=claimed['version'],
+                        owner=owner, key=f'failure:{transition_key}', stage='failed', checkpoint_id=checkpoint_id, now=time.time())
+                    if finished is None:
+                        raise ValueError('La persistencia del fallo perdió su lease') from error
+                    attempt['checkpoint_id'] = checkpoint_id
+                    self._save(record)
+                    raise
                 self.coordinator.finish(
                     run_id, attempt["attempt_id"], expected_version=claimed["version"],
                     owner=owner, key=f"error:{transition_key}", stage=stage,
@@ -392,6 +430,49 @@ class ConversationEngine:
             if next_stage in _WAITS | _FINAL:
                 return record
         raise RuntimeError("El flujo excedió el número de transiciones consecutivas")
+
+    def retry(self, run_id, *, expected_revision, actor, failure_id=None):
+        record = self.get(run_id)
+        attempt = record['attempts'][-1]
+        failure = attempt.get('failure') or {}
+        if (not actor or record['state'] != 'failed' or not failure.get('retryable')
+                or attempt['revision'] != expected_revision or failure.get('id') != failure_id):
+            raise ValueError('No hay una etapa fallida vigente para reintentar')
+        self._require_profile(record)
+        row = self.coordinator.get(run_id, attempt['attempt_id'])
+        if not row or row['stage'] != 'failed' or row['checkpoint_id'] != attempt.get('checkpoint_id'):
+            raise ValueError('El fallo ya fue reanudado o su checkpoint cambió')
+        owner = uuid.uuid4().hex
+        key = f"retry:{failure_id}"
+        claimed = self.coordinator.claim(run_id, attempt['attempt_id'], expected_version=row['version'],
+            owner=owner, key=key, now=time.time(), ttl_seconds=1800)
+        if claimed is None:
+            raise ValueError('El intento ya está siendo procesado')
+        try:
+            stage = failure['failed_stage']
+            # Restore the exact failure checkpoint and metadata before resuming.
+            checkpoint = self.store.load_checkpoint(run_id, attempt['attempt_id'], row['checkpoint_id'])
+            if (checkpoint['metadata']['attempt'].get('failure') or {}).get('id') != failure_id:
+                raise ValueError('El fallo no coincide con el checkpoint')
+            self._event(attempt, 'retry', actor=actor, failure_id=failure_id, failed_stage=stage)
+            attempt['stage'], attempt['state'] = stage, 'queued'
+            attempt['failure'] = None
+            attempt['error'] = record['error'] = None
+            attempt['finished_at'] = record['finished_at'] = None
+            record['state'] = 'queued'
+            checkpoint_id = self.store.save_checkpoint(run_id, attempt['attempt_id'], max(1, attempt['revision']),
+                attempt['base_sha'], checkpoint['files'], metadata={'attempt': attempt})
+            finished = self.coordinator.finish(run_id, attempt['attempt_id'], expected_version=claimed['version'],
+                owner=owner, key=f'finish:{key}', stage=stage, checkpoint_id=checkpoint_id, now=time.time())
+            if finished is None:
+                raise ValueError('El reintento perdió su lease')
+            attempt['checkpoint_id'] = checkpoint_id
+            self._save(record)
+        except Exception:
+            self.coordinator.finish(run_id, attempt['attempt_id'], expected_version=claimed['version'],
+                owner=owner, key=f'error:{key}', stage=row['stage'], checkpoint_id=row['checkpoint_id'], now=time.time())
+            raise
+        return self.advance(run_id)
 
     def _allows(self, path: str) -> bool:
         policy = self.profile.general_patch
@@ -482,7 +563,7 @@ class ConversationEngine:
                 slug = re.sub(r"[^a-z0-9-]+", "-", story.hu.lower()).strip("-")[:40] or "story"
                 change_id = f"{slug}-{attempt['attempt_id'][:8]}"
                 context["change_id"] = change_id
-            feedback = context.pop("feedback", None)
+            feedback = context.get("feedback")
             plan = propose_client_change(
                 self.cli, root, change_id, story, models,
                 source_summary=_source_summary(root, self.profile) + "\n" + context.get("clarification", ""),
@@ -494,6 +575,7 @@ class ConversationEngine:
                 on_artifact=lambda path, content, digest: self._save_artifact(record, attempt, path, content, digest),
             )
             attempt["revision"] += 1
+            context.pop('feedback', None)
             context['plan_metadata'] = plan.metadata
             context['plan_metadata']['instruction_catalog'] = context['instruction_catalog']
             context['plan_paths'] = sorted(plan.artifacts)

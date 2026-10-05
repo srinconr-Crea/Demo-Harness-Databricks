@@ -341,10 +341,11 @@ def test_pr_identity_survives_failure_after_pr_creation(tmp_path: Path):
         engine.act(run_id, "approve", actor="ana@example.com", expected_revision=candidate["revision"],
                    expected_hash=candidate["context"]["candidate_hash"], key="diff-pr")
     saved = store.load(run_id)["attempts"][-1]
-    assert saved["stage"] == "publishing"
+    assert saved["stage"] == "failed"
+    assert saved['failure']['failed_stage'] == 'publishing'
     assert saved["publication"]["pr_url"] == "https://github.com/example/client/pull/7"
     assert saved["publication"]["commit_sha"] == "c" * 40
-    engine.advance(run_id)
+    engine.retry(run_id, expected_revision=saved['revision'], actor='ana@example.com', failure_id=saved['failure']['id'])
     completed = store.load(run_id)
     assert completed["state"] == "complete"
     assert completed["attempts"][-1]["publication"]["commit_sha"] == "c" * 40

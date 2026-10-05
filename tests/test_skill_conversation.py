@@ -29,8 +29,9 @@ def test_recovery_blocks_tampered_skill_and_legacy_can_restart(tmp_path):
     record = store.load(run_id)
     record['attempts'][-1]['context'].pop('instruction_engine')
     store.save(run_id, record)
-    with pytest.raises(ValueError, match='histórico'):
-        engine.advance(run_id, action={'kind': 'answer', 'actor': 'ana', 'key': 'legacy', 'text': '2'})
+    failed = engine.advance(run_id, action={'kind': 'answer', 'actor': 'ana', 'key': 'legacy', 'text': '2'})
+    assert failed['state'] == 'failed'
+    assert failed['attempts'][-1]['failure']['category'] == 'preparation_error'
     previous = record['attempts'][-1]['attempt_id']
     engine.retry_legacy(run_id)
     current = store.load(run_id)['attempts'][-1]

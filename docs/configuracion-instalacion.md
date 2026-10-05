@@ -83,6 +83,27 @@ Rollback: redeplegar revisión y paquete previos con su perfil y recursos. Nunca
 utilices registros de un cliente en otra instalación. El registro histórico
 sigue legible sin inventar procedencia, tokens o costos.
 
+## Capacidades y presupuestos de modelos
+
+`config/defaults/agents.yaml` define `max_tokens` como fallback y
+`role_max_tokens.planner: 64000`. `config/defaults/models.yaml` define por endpoint
+`endpoint_capabilities` con `max_output_tokens` y `json_schema`; son configuración
+confiable de instalación y no pueden cambiarse desde una HU. La solicitud rechaza
+límites incompatibles y entrada más reserva que excedan el contexto; no degrada
+silenciosamente el presupuesto. Configuraciones históricas con solo max_tokens
+mantienen su fallback.
+
+Antes de habilitar 64000 o esquema en otra instalación, comprobar el endpoint real
+con una salida sintética breve y conservar metadata, solicitud efectiva,
+finish_reason, usage y duración. Un techo de 64000 no exige generar esa cantidad.
+El piloto CREA_DEV verificó presupuesto y esquema el 5 de octubre de 2026; esa
+evidencia no garantiza la misma capacidad o latencia en otros endpoints.
+
+Antes de actualizar, drenar trabajadores y conservar paquete previo. Lectores
+antiguos pueden descartar los campos de recuperación nuevos: un rollback requiere
+lectores compatibles o detener admisión hasta resolver compatibilidad. No borrar
+checkpoints ni continuar históricos con una procedencia distinta.
+
 ## Inicio desde Windows
 
 ```powershell

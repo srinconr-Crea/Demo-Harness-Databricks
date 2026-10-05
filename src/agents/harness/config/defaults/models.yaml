@@ -1,3 +1,7 @@
+endpoint_capabilities:
+  databricks-claude-sonnet-5:
+    max_output_tokens: 64000
+    json_schema: true
 routing:
   # Desarrollo general: Sonnet explora, planifica, aplica y verifica OpenSpec.
   # Haiku conserva su función asesora; la HU no puede cambiar este routing.

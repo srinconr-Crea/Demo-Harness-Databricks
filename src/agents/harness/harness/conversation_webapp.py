@@ -32,14 +32,18 @@ class ActionRequest(BaseModel):
 
 class RetryRequest(BaseModel):
     expected_revision: int = Field(ge=0)
+    failure_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{32}$')
 
 
 def create_conversation_app(engine, profile) -> FastAPI:
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="harness-conversation")
     error_lock = Lock()
 
-    def background(run_id: str, action: dict | None = None, retry_legacy: bool = False) -> None:
+    def background(run_id: str, action: dict | None = None, retry_legacy: bool = False, retry_options: dict | None = None) -> None:
         try:
+            if retry_options:
+                engine.retry(run_id, **retry_options)
+                return
             if retry_legacy:
                 engine.retry_legacy(run_id)
             if action:
@@ -52,25 +56,17 @@ def create_conversation_app(engine, profile) -> FastAPI:
         except Exception as error:  # noqa: BLE001 - surfaced as a durable event
             if str(error) == "El intento ya está siendo procesado":
                 return
-            with error_lock:
-                try:
-                    record = engine.get(run_id)
-                    attempt = record["attempts"][-1]
-                    timeline = attempt.setdefault("timeline", [])
-                    timeline.append({"seq": len(timeline) + 1, "stage": attempt.get("stage"),
-                                     "kind": "error", "revision": attempt.get("revision", 0),
-                                     "at": datetime.now(timezone.utc).isoformat(),
-                                     "details": {"message": sanitize_log_value(str(error), 1000)}})
-                    engine._save(record)
-                except Exception as persistence_error:  # noqa: BLE001 - background worker boundary
-                    logging.getLogger(__name__).error('No se pudo persistir el fallo: %s', type(persistence_error).__name__)
+            # The engine owns state transitions under its lease. A worker must never
+            # overwrite a checkpoint or a newer transition after losing ownership.
+            logging.getLogger(__name__).error('Fallo del trabajador: %s', type(error).__name__)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         for run_id in engine.store.list_runs():
             try:
                 record = engine.get(run_id)
-                if record["state"] in {"queued", "running"}:
+                timeline = record['attempts'][-1].get('timeline') or []
+                if record["state"] in {"queued", "running"} and not (timeline and timeline[-1]['kind'] == 'error'):
                     executor.submit(background, run_id)
             except Exception as recovery_error:  # noqa: BLE001 - recover other runs independently
                 logging.getLogger(__name__).error('No se pudo recuperar el intento: %s', type(recovery_error).__name__)
@@ -206,12 +202,19 @@ def create_conversation_app(engine, profile) -> FastAPI:
     def retry(run_id: str, payload: RetryRequest, request: Request):
         record, _actor = authorized_run(run_id, request)
         attempt = record["attempts"][-1]
+        failure = attempt.get('failure') or {}
+        if record['state'] == 'failed' and engine.profile_matches(record) and engine.context_matches(record):
+            if (not failure.get('retryable') or attempt['revision'] != payload.expected_revision
+                    or failure.get('id') != payload.failure_id):
+                raise HTTPException(status_code=409, detail='No hay una etapa fallida vigente para reintentar')
+            executor.submit(background, run_id, retry_options={**payload.model_dump(), 'actor': _actor})
+            return {'run_id': run_id, 'state': 'retry_queued'}
         timeline = attempt.get("timeline") or []
         legacy = attempt.get('context', {}).get('instruction_engine') != 'client-skills-v1'
         if record.get('repository') != profile.repository:
             raise HTTPException(status_code=409, detail='El repositorio no corresponde a esta instalación')
         legacy = legacy or not engine.profile_matches(record) or not engine.context_matches(record)
-        if (record["state"] not in {"queued", "running", "awaiting_plan_review", "awaiting_clarification", "awaiting_diff_review"}
+        if (record["state"] not in {"queued", "running", "awaiting_plan_review", "awaiting_clarification", "awaiting_diff_review", "failed"}
                 or attempt["revision"] != payload.expected_revision
                 or (not legacy and (record['state'] not in {'queued', 'running'} or not timeline or timeline[-1]['kind'] != 'error'))):
             raise HTTPException(status_code=409, detail="No hay una etapa fallida vigente para reintentar")

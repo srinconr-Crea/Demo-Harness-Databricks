@@ -232,6 +232,7 @@ class RunAttempt(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error: str | None = None
+    failure: dict | None = None
     changed_files: list[str] = Field(default_factory=list)
     result: dict | None = None
     publication: dict = Field(default_factory=lambda: {"stage": "not_started"})
@@ -278,6 +279,13 @@ class AgentCallContract(BaseModel):
     context_provenance: dict | None = None
     model: str
     status: Literal["complete", "failed"] = "complete"
+    finish_reason: str | None = None
+    effective_max_tokens: int | None = Field(default=None, gt=0)
+    acceptance: str | None = None
+    parent_call_id: str | None = None
+    recovery_index: int | None = Field(default=None, ge=1, le=1)
+    normalized_sha256: str | None = None
+    response_evidence_sha256: str | None = None
     input_text: str | None = None
     output_text: str | None = None
     parsed_output: dict | None = None

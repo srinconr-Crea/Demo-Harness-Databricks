@@ -40,6 +40,7 @@ PROFILE = load_selected_profile(ROOT)
 ROUTING, PRICES, PRICING_SOURCE = load_model_config(ROOT / "config" / "defaults" / "models.yaml")
 RUNTIME = load_runtime_config(ROOT / "config" / "defaults" / "runtime.yaml")
 AGENT_CONFIG = yaml.safe_load((ROOT / "config" / "defaults" / "agents.yaml").read_text(encoding="utf-8"))
+MODEL_CONFIG = yaml.safe_load((ROOT / 'config' / 'defaults' / 'models.yaml').read_text(encoding='utf-8'))
 WORKSPACE = WorkspaceClient()
 run_directory = os.environ.get("RUN_STORE_DIR")
 STORE = VolumeRunStore(WORKSPACE.files, run_directory) if run_directory else LocalRunStore(ROOT / ".runs")
@@ -81,6 +82,12 @@ def models_factory(run_id: str, attempt_id: str):
         contract = AgentCallContract(
             call_id=response.call_id, run_id=run_id, attempt_id=attempt_id,
             story_id=story_id, role=role, model=response.model, status=response.status,
+            finish_reason=response.finish_reason, effective_max_tokens=response.effective_max_tokens,
+            acceptance=response.acceptance, parent_call_id=response.parent_call_id,
+            recovery_index=response.recovery_index, normalized_sha256=response.normalized_sha256,
+            response_evidence_sha256=STORE.save_instruction_snapshot(run_id, attempt_id,
+                {'kind': 'model_response', 'call_id': response.call_id,
+                 'original': response.text, 'normalized': response.normalized_text}),
             stage=response.stage, revision=response.revision,
             approved_sha256=response.approved_sha256,
             instruction_provenance=response.instruction_provenance,
@@ -102,6 +109,8 @@ def models_factory(run_id: str, attempt_id: str):
         WORKSPACE.api_client, ROUTING, PRICES, on_call=save_call,
         log_text_limit=RUNTIME["logging"]["max_text_chars"],
         system_prompt=AGENT_CONFIG["system_prompt"], max_tokens=AGENT_CONFIG["max_tokens"],
+        role_max_tokens=AGENT_CONFIG.get('role_max_tokens'),
+        endpoint_capabilities=MODEL_CONFIG.get('endpoint_capabilities'),
         usage_context={"run_id": run_id, "attempt_id": attempt_id,
                        "story_id": story_id, "client_profile": PROFILE.name},
     )

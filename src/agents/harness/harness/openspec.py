@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import os
 import re
@@ -10,6 +11,7 @@ import shutil
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import wraps
 from pathlib import Path
 
 import yaml
@@ -225,6 +227,28 @@ class PlanResult:
     metadata: dict = field(default_factory=dict)
 
 
+def _planner_validation(function):
+    @wraps(function)
+    def checked(*args, **kwargs):
+        models = inspect.signature(function).bind(*args, **kwargs).arguments['models']
+        start = len(getattr(models, 'calls', []))
+        try:
+            result = function(*args, **kwargs)
+        except ValueError as error:
+            if hasattr(models, 'mark_response') and len(models.calls) > start:
+                call = models.calls[-1]
+                category = getattr(error, 'category', 'invalid_contract')
+                models.mark_response('planner', call, category)
+            raise
+        if hasattr(models, 'mark_response'):
+            for call in list(models.calls[start:]):
+                if call.acceptance in {'parsed', 'normalized'}:
+                    models.mark_response('planner', call, 'accepted')
+        return result
+    return checked
+
+
+@_planner_validation
 def propose_client_change(
     cli: OpenSpecCLI, root: Path, change_id: str, story: StoryRequest,
     models, *, source_summary: str = "", feedback: str | None = None,
@@ -284,7 +308,7 @@ def propose_client_change(
         else:
             prompt['openspec_instructions'] = instructions
         parsed = contextual_answer(models, 'planner', prompt, repo_context,
-            stage='updating' if feedback else 'proposing', revision=revision, max_tokens=6000,
+            stage='updating' if feedback else 'proposing', revision=revision,
             context_manager=context_manager, phase='update' if feedback else 'propose', **extras)
         if not isinstance(parsed, dict) or not isinstance(parsed.get("content"), str) or not 20 <= len(parsed["content"]) <= 50000:
             raise ValueError("El planner devolvió un artefacto OpenSpec inválido")
@@ -316,6 +340,7 @@ def propose_client_change(
     return PlanResult(change_id, artifacts, hashes, metadata)
 
 
+@_planner_validation
 def plan_client_change(
     cli: OpenSpecCLI,
     root: Path,
@@ -367,7 +392,9 @@ def plan_client_change(
             "output_path": suffix,
             "response_format": {"content": "texto del artefacto", "strategy": profile.strategy.kind, "code_path": profile.strategy.notebook, "expression": spec.expression},
         }, ensure_ascii=False)
-        response = parse_agent_output("planner", models.complete("planner", prompt, max_tokens=6000).text)
+        from .repo_context import contextual_answer
+        response = contextual_answer(models, 'planner', json.loads(prompt))
+        response = parse_agent_output('planner', json.dumps(response, ensure_ascii=False))
         if response["strategy"] != profile.strategy.kind or response["code_path"] != profile.strategy.notebook or response["expression"] != spec.expression or not profile.allows(response["code_path"]):
             raise ValueError("El manifiesto del planner excede la política validada")
         content = response["content"].strip() + "\n"

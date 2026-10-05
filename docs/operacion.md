@@ -77,11 +77,45 @@ secretos, datos y runtime están excluidos según política. No habilita ejecuci
 ni despliegue de recursos cliente. `silver_safe_ratio` conserva editor y prueba
 SQL acotados. Los valores concretos del piloto viven en su ejemplo.
 
-Las pruebas funcionales se seleccionan desde `tests/` del cliente y corren en el Job separado, junto con la validación estática del tipo de archivo. Pytest conserva Python aislado, plugins externos deshabilitados y entorno sin credenciales; `pythonpath=.` añade únicamente la raíz del checkout a las importaciones de pruebas. Los YAML compartidos mantienen Sonnet obligatorio y Haiku asesor, amplían la respuesta máxima a 12000 tokens y el registro resumido a 64000 caracteres. El presupuesto de contexto cliente permite 50 lecturas, 400 KB acumulados y 120 segundos por etapa.
+Las pruebas funcionales se seleccionan desde `tests/` del cliente y corren en el Job separado, junto con la validación estática del tipo de archivo. Pytest conserva Python aislado, plugins externos deshabilitados y entorno sin credenciales; `pythonpath=.` añade únicamente la raíz del checkout a las importaciones de pruebas. Los YAML compartidos mantienen Sonnet obligatorio y Haiku asesor; el planner permite hasta 64000 tokens y otros roles conservan 12000 como fallback, con registro resumido de 64000 caracteres. El presupuesto de contexto cliente permite 50 lecturas, 400 KB acumulados y 120 segundos por etapa.
 
 Antes de la primera HU, integrar en `develop` la preparación manual OpenSpec 1.13.2 con las siete skills, contexto del proyecto y reglas; comprobar el acceso de la GitHub App y mantener pruebas sintéticas del comportamiento afectado. Una primera prueba de documentación o código puro con regresiones existentes evita depender de recursos externos. Selecciona pruebas existentes en el checkout cliente: este harness no aporta automáticamente una suite al cliente. En el producto, [test_project_context.py](../tests/test_project_context.py) comprueba referencias y el contexto general; nuevas reglas funcionales requieren pruebas específicas en el manifiesto aprobado.
 
 Los cambios en `databricks.yml` o `resources/` activan obligatoriamente `bundle validate --strict -t dev`, si ese target está configurado en el perfil aprobado. Esta comprobación requiere CLI Databricks y autenticación aislada provisionadas en el Job; el runtime actual del Job solo declara pytest y no prepara dichas herramientas. Hasta provisionarlas, las HUs de bundle quedan bloqueadas en verificación y no publican PR. Nunca usar credenciales de la App como alternativa ni ejecutar bundle deploy/run del cliente. La revisión del PR y la parada de la App siguen siendo decisiones humanas.
+
+## Fallos del planner y reintento
+
+El planner usa un límite de salida por rol de 64.000 tokens; otros roles conservan
+el fallback de 12.000. La configuración confiable declara capacidades por endpoint;
+el harness comprueba entrada más reserva de salida sin reducir silenciosamente
+límites ni instrucciones. El límite de log sigue siendo 64.000 caracteres y su
+recorte no indica truncamiento del modelo. Los límites de artefacto y permisos
+siguen aplicándose aunque la respuesta permitida sea mayor.
+
+El JSON por esquema se solicita cuando el endpoint está comprobado y habilitado.
+Se distinguen output_truncated (terminación por límite), malformed_json y
+invalid_contract. Sin finish_reason se conserva su ausencia. JSON completo con
+CR/LF/tab literales en cadenas cerradas admite escape sintáctico conservador;
+no se inventan cierres ni valores, y claves duplicadas se rechazan. Si aún falla
+la serialización de una respuesta final completa del planner, puede realizarse
+una sola llamada adicional de corrección, vinculada a la original. No se recuperan
+automáticamente truncamientos, contratos inválidos ni solicitudes de contexto
+mal formadas. Contrato, manifiesto, política y OpenSpec siguen siendo obligatorios.
+
+Un fallo persiste failed con etapa de origen, revisión, identidad y recuperabilidad.
+La App muestra causa y Reintentar etapa cuando procede. El reintento humano
+conserva aclaraciones y evidencia, restaura el checkpoint íntegro y puede regenerar
+artefactos de esa etapa. El plan resultante requiere aprobación vigente. Reiniciar
+la App no reintenta fallos persistidos ni históricos con último evento de error.
+Retry comprueba failure_id, revisión, perfil, contexto y procedencia; lease/CAS
+impide trabajadores duplicados. Si falla el almacenamiento o se pierde el lease,
+se conserva el checkpoint previo y se diagnostica sin fabricar una transición.
+
+Las llamadas agregan finish_reason, effective_max_tokens, acceptance,
+parent_call_id/recovery_index y huellas de normalización. La evidencia íntegra de
+respuesta se conserva en snapshots protegidos del almacén existente; no se expone
+por el hilo. Cada llamada real mantiene usage/costo estimado propio; normalización
+local no genera una llamada ficticia. Los históricos admiten campos ausentes.
 
 ## Registros, costos y retención
 

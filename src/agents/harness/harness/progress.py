@@ -49,6 +49,9 @@ def checklist(attempt):
         ]
         if errors and (event is None or errors[-1]["seq"] > event["seq"]):
             state, event = "failed", errors[-1]
+        failure = attempt.get('failure') or {}
+        if attempt.get('stage') == 'failed' and STAGES.get(failure.get('failed_stage')) == phase:
+            state = 'failed'
         if active and attempt.get("stage", "").startswith("awaiting_"):
             state = "blocked"
         rows.append(
