@@ -52,3 +52,32 @@ El usuario autorizó explícitamente archivar/push antes de desplegar. La identi
 Suite completa: 316 passed, 0 failed (cuatro grupos aislados: 66 + 85 + 67 + 98). Se usó el Python del entorno del proyecto con pytest -q -p no:cacheprovider y temporales cortos de Windows; el comando uv equivalente no pudo acceder al caché desde el sandbox. Sin fallos en la repetición final. Advertencia existente de deprecación Starlette/httpx; no altera los resultados.
 
 OpenSpec validate del cambio en modo strict: válido. `validate --specs --strict`: 15 passed, 0 failed. Se sincronizaron agent-prompt-contracts, change-planning y observability-control; los bloques de delta se compararon con las especificaciones principales y se preservaron sus demás requisitos. Implementación localizada en prompt_contracts/repo_context/context_manager, models/config, pruebas de contrato/recovery y empaquetado. El archivo mantiene explícitas las comprobaciones operativas 4.2 y 5.4 hasta el despliegue autorizado.
+
+## Verificación operativa completada
+
+Commit de producto `fc28647`, push confirmado a `Db_Spec_Harness` antes de cualquier despliegue. Se actualizó únicamente el recurso de modelo `sonnet-five` a `databricks-claude-sonnet-5-5` con CAN_QUERY; se conservaron los demás recursos, identidad, permisos y `user_api_scopes: [apps]`. No se desplegó el bundle completo ni se alteraron recursos NaturaPet.
+
+### Identidad y smoke de la App
+
+Deployment temporal `01f1c1003aa6196e8f80c603b847df22`, SUCCEEDED. Identidad comprobada `8910cd3e-32f6-4c75-b16f-b5ff3ea258d2` (OAuth de la App). El acceso real a Foundation Model API confirma que el permiso efectivo permite consultar Sonnet 5.5; es evidencia distinta de CREA_DEV.
+
+El smoke remoto usó un archivo sintético aislado en un directorio temporal: rechazó una lista inyectada sin lecturas, ejecutó manualmente el siguiente intento autorizado del bucle de exploración con read_file y search_text sucesivos, aceptó la salida final y generó Markdown de planificación con límite efectivo 64.000. Todas las invocaciones reales terminaron con stop y su uso/costo se persistió por intento. El rechazo inyectado no produjo una llamada ni costo ficticios. Este smoke remoto comprueba identidad, endpoint y bucle de contexto; las garantías de retry de ConversationEngine/API (revisión, failure_id, CAS, checkpoint y aprobación del plan) se comprobaron en la suite y el recorrido integrado local, sin ejecutar una HU cliente real en la App.
+
+JSON remoto de llamadas y checks: `/Volumes/demo_harness_databricks_dev/dev_srinconr_demo_harness_databricks/artifacts/verification-sonnet55/e9864637456c4ad4ad09149234aa8d10.json`.
+
+| call_id | Rol | Entrada/salida | Límite efectivo | Costo USD estimado |
+| --- | --- | --- | --- | --- |
+| 8eb425bfcb2a4c88be93591ee10e548a | explorer | 688 / 27 | 12000 | 0.001646 |
+| b7f6af25d3c4440292519937360f556b | explorer | 799 / 25 | 12000 | 0.001848 |
+| 48d19f9ac2cc488fa9ecf2c6ac33215f | explorer | 920 / 157 | 12000 | 0.003410 |
+| 412cb4ca0f0f469b8266ef0792969133 | planner | 147 / 683 | 64000 | 0.007124 |
+
+Total estimado de estas cuatro llamadas: USD 0.014028; no representa facturación real.
+
+### Despliegue final e histórico
+
+Deployment final `01f1c1006b611cb3a08f9f135fb37cd7`, SUCCEEDED el 2026-10-05T21:05:15Z. Fuente final `/Workspace/Users/srinconr@creasistemas.com/apps/demo-harness-context-sonnet55-20261005`; snapshot `/Workspace/Users/8910cd3e-32f6-4c75-b16f-b5ff3ea258d2/src/01f1c1006b611cb3a08f9f135fb37cd7`. La fuente final contiene 39 archivos de producto/instalación y no incluye el verificador temporal ni fixtures de tests. Compute ACTIVE, App RUNNING. El build instaló dependencias Python y la versión fijada de OpenSpec; npm informó cuatro vulnerabilidades high en el lock existente, sin ejecutar npm audit fix ni modificar dependencias fuera del alcance.
+
+Con autenticación de CREA_DEV, GET `/`, `/configuration` y `/runs/fa0d8173517049358f53871d45c49117` devolvieron HTTP 200. El HTML mantiene el control de retry; la respuesta de la ejecución histórica conserva failed, invalid_contract, exploring, revisión 0 y retryable=false. El navegador de Codex requiere sesión interactiva de Databricks, por lo que la comprobación de disponibilidad se realizó por HTTP autenticado, sin alterar el flujo de login.
+
+SHA256 exacto del registro histórico antes/después: `c27bb042562239361fbd3afbc7d98ee2732a87460ae1f5393cf766d883d0b670`. No se reejecutó esa HU ni se reescribieron sus llamadas, precios, aprobaciones o checkpoints. El paquete previo de rollback continúa disponible. Las dos comprobaciones operativas quedaron completadas después del archivo/push inicial, según la secuencia solicitada.
