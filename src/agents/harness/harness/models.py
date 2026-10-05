@@ -23,10 +23,11 @@ def load_model_config(path: str | Path) -> tuple[dict[str, str], dict[str, tuple
     routing = config["routing"]
     if not {"planner", "developer", "verifier"}.issubset(routing):
         raise ValueError("La configuración de modelos requiere los tres roles")
-    if routing["planner"] != "databricks-claude-sonnet-5":
-        raise ValueError("El rol planner requiere databricks-claude-sonnet-5")
-    if any(routing.get(role, "databricks-claude-sonnet-5") != "databricks-claude-sonnet-5" for role in ("explorer", "openspec_verifier")):
-        raise ValueError("Los flujos OpenSpec requieren databricks-claude-sonnet-5")
+    if routing["planner"] != "databricks-claude-sonnet-5-5":
+        raise ValueError("El rol planner requiere databricks-claude-sonnet-5-5")
+    if any(routing.get(role) != "databricks-claude-sonnet-5-5"
+           for role in ("explorer", "developer", "openspec_verifier")):
+        raise ValueError("Los flujos OpenSpec requieren databricks-claude-sonnet-5-5")
     prices = {
         endpoint: (Decimal(str(rates["input_usd_per_token"])), Decimal(str(rates["output_usd_per_token"])))
         for endpoint, rates in config["pricing"]["endpoints"].items()

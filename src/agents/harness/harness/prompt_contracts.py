@@ -97,6 +97,22 @@ TOOLS = {
 }
 
 
+def context_contract():
+    return (
+        'Una sola operación de contexto por turno. Responde exclusivamente con '
+        'context_request como objeto, nunca lista, null ni mezclado con salida final. '
+        'Formas exactas: {"context_request":{"op":"list_tree"}}; '
+        '{"context_request":{"op":"read_file","path":"src/common/schema.py"}}; '
+        '{"context_request":{"op":"search_text","query":"normalize_table_name"}}. '
+        'op es string. list_tree solo admite op; read_file admite op y path '
+        '(string relativo autorizado, hasta 500 caracteres); search_text admite op y query '
+        '(string de 1 a 200 caracteres). No agregues path a list_tree o search_text. '
+        'Los límites de lecturas, búsquedas, rondas, bytes y tiempo son los del perfil. '
+        'Después del resultado solicita otra operación individual o entrega el contrato '
+        'final del rol, sin context_request. Los rechazos no amplían permisos.'
+    )
+
+
 class PromptContracts:
     def __init__(self):
         self.catalog = yaml.safe_load(CATALOG.read_text(encoding='utf-8'))
@@ -117,10 +133,11 @@ class PromptContracts:
 
 def validate_request(request):
     if not isinstance(request, dict):
-        raise ValueError('Solicitud de contexto inválida')  # noqa: TRY004 - public validation contract
+        received = 'lista' if isinstance(request, list) else 'null' if request is None else 'otro tipo'
+        raise ValueError(f'context_request debe ser un objeto; se recibió {received}')
     op = request.get('op')
     expected = {'list_tree': {'op'}, 'read_file': {'op', 'path'}, 'search_text': {'op', 'query'}}
-    if op not in expected or set(request) != expected[op]:
+    if not isinstance(op, str) or op not in expected or set(request) != expected[op]:
         raise ValueError('Operación o campos de contexto inválidos')
     if op == 'read_file' and (not isinstance(request['path'], str)
                               or len(request['path']) > 500 or not valid_relative(request['path'])):

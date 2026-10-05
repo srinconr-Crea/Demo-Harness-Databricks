@@ -161,6 +161,9 @@ def test_packaging_two_clients_and_configuration(tmp_path):
     # Small product checkout exercises actual Git discovery, not a mocked copy list.
     (tmp_path / 'src/agents/harness/app').mkdir(parents=True)
     (tmp_path / 'src/agents/harness/app/index.html').write_text('common-product', encoding='utf-8')
+    models_path = tmp_path / 'src/agents/harness/config/defaults/models.yaml'
+    models_path.parent.mkdir(parents=True)
+    models_path.write_bytes((ROOT / 'src/agents/harness/config/defaults/models.yaml').read_bytes())
     (tmp_path / '.gitignore').write_text('.deployments/\nnode_modules/\n', encoding='utf-8')
     (tmp_path / 'databricks.yml').write_bytes((ROOT / 'databricks.yml').read_bytes())
     subprocess.run(['git', 'init', '-b', 'develop'], cwd=tmp_path, check=True, capture_output=True)
@@ -169,6 +172,13 @@ def test_packaging_two_clients_and_configuration(tmp_path):
     path, _ = write_profile(tmp_path)
     env = yaml.safe_load((ROOT / 'examples/naturapet/environment.yaml').read_text(encoding='utf-8'))
     env_path = tmp_path / 'environment.yaml'
+    env_path.write_text(yaml.safe_dump(env), encoding='utf-8')
+    env['variables']['sonnet_endpoint'] = 'databricks-claude-sonnet-5'
+    env_path.write_text(yaml.safe_dump(env), encoding='utf-8')
+    with pytest.raises(ValueError, match='routing'):
+        packager.prepare('bad-routing', path, env_path, root=tmp_path)
+    assert not (tmp_path / '.deployments/bad-routing').exists()
+    env['variables']['sonnet_endpoint'] = 'databricks-claude-sonnet-5-5'
     env_path.write_text(yaml.safe_dump(env), encoding='utf-8')
     first = packager.prepare('client-a', path, env_path, root=tmp_path)
     path.write_text(path.read_text().replace('example/client', 'example/client-b').replace('name: test', 'name: client-b'), encoding='utf-8')

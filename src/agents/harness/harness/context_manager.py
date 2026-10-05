@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 
 from .contracts import ContextEnvelope, ContextPolicy, DecisionRecord, SelectionRecord
-from .prompt_contracts import TOOLS, PromptContracts, validate_output
+from .prompt_contracts import TOOLS, PromptContracts, context_contract, validate_output
 from .skills import digest
 
 
@@ -192,6 +192,7 @@ class ContextManager:
         value['pending_questions'] = self.questions
         if repo_context:
             value['context_tools'] = TOOLS
+            value['context_contract'] = context_contract()
         before = json.dumps({**value, 'context_history': history}, ensure_ascii=False)
         selected, excluded, seen = [], [], set()
         sources = []

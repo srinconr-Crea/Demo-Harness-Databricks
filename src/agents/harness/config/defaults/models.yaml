@@ -1,22 +1,22 @@
 endpoint_capabilities:
-  databricks-claude-sonnet-5:
+  databricks-claude-sonnet-5-5:
     max_output_tokens: 64000
-    json_schema: true
+    json_schema: false
 routing:
   # Desarrollo general: Sonnet explora, planifica, aplica y verifica OpenSpec.
   # Haiku conserva su función asesora; la HU no puede cambiar este routing.
-  explorer: databricks-claude-sonnet-5
-  planner: databricks-claude-sonnet-5
-  openspec_verifier: databricks-claude-sonnet-5
-  developer: databricks-claude-sonnet-5
+  explorer: databricks-claude-sonnet-5-5
+  planner: databricks-claude-sonnet-5-5
+  openspec_verifier: databricks-claude-sonnet-5-5
+  developer: databricks-claude-sonnet-5-5
   verifier: databricks-claude-haiku-4-5
 pricing:
   currency: USD
-  source: User-provided Databricks calculator screenshots, Azure US East 2, 2026-09-25; estimated rates
+  source: 'Sonnet 5.5: Databricks proprietary serving rate card (28.571/142.857 DBU per million input/output tokens) x Azure Retail Prices API East US 2 USD 0.07/DBU, checked 2026-10-05; rounded global estimates. Haiku 4.5: user-provided calculator screenshots 2026-09-25. Not invoiced rates; see docs/evidence/2026-10-05-sonnet55/verification.md.'
   endpoints:
-    databricks-claude-sonnet-5:
-      input_usd_per_token: 0.000003
-      output_usd_per_token: 0.000015
+    databricks-claude-sonnet-5-5:
+      input_usd_per_token: 0.000002
+      output_usd_per_token: 0.000010
     databricks-claude-haiku-4-5:
       input_usd_per_token: 0.0000015
       output_usd_per_token: 0.0000075

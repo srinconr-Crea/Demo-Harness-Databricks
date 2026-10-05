@@ -88,6 +88,15 @@ def create_fixture(data_dir: Path):
                 value = json.loads(response.text)
                 value['content'] = value['content'].replace('## ADDED Requirements', '## Purpose\n\nDefinir la salida comprobable del cliente sintético y sus formatos asociados.\n\n## ADDED Requirements')
                 response.text = json.dumps(value)
+            if role == 'planner' and payload['artifact'] in {'design', 'tasks'}:
+                # The real CLI's template is authoritative for required headings.
+                value = json.loads(response.text)
+                for line in payload.get('template', '').splitlines():
+                    if line.startswith('## ') and '<!--' not in line and line not in value['content'].splitlines():
+                        value['content'] += '\n' + line + '\n' + (
+                            '- [ ] 1.2 Verificar salida sintética.\n' if payload['artifact'] == 'tasks'
+                            else 'Alcance local sintético; conservar controles y verificar salida.\n')
+                response.text = json.dumps(value)
             if role == 'developer':
                 value = json.loads(response.text)
                 value['operations'][0]['expected_sha256'] = payload['context_history'][-1]['result']['sha256']

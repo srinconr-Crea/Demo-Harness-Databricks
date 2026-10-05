@@ -154,3 +154,27 @@ reinterpreta el texto para aparentar éxito, y no generan otra llamada automáti
 Los errores históricos conservan su mensaje original. La consulta de llamadas
 permite localizar `call_id` y `response_evidence_sha256` para revisar el original
 con los permisos existentes. Los presupuestos y reglas de retry no cambian.
+
+## Solicitudes individuales de contexto
+
+El modelo solicita una sola operación por turno, exclusivamente mediante
+context_request como objeto. Las formas admitidas son:
+
+```json
+{"context_request":{"op":"list_tree"}}
+{"context_request":{"op":"read_file","path":"src/common/schema.py"}}
+{"context_request":{"op":"search_text","query":"normalize_table_name"}}
+```
+
+Cada línea corresponde a una respuesta distinta. list_tree no recibe path;
+search_text recibe solo op y query. Después del resultado puede solicitar otra
+operación o devolver el contrato final del rol sin context_request. Listas, null,
+campos adicionales y solicitudes mezcladas con salida final se rechazan antes
+de leer, con acceptance=invalid_contract y diagnóstico seguro.
+
+Los nuevos fallos de formato admiten Reintentar etapa por acción humana con
+identidad, failure_id, revisión, perfil, contexto, procedencia y checkpoint
+compatibles. Un reinicio no los reintenta automáticamente. Los históricos
+con retryable=false conservan su mensaje y estado; para repetir ese caso se
+presenta una HU nueva con planificación y aprobación propias. Política,
+permisos, presupuestos y tratamiento de denegaciones siguen vigentes.

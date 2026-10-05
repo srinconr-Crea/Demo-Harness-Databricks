@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from .repository_policy import safe_target
+from .prompt_contracts import TOOLS, context_contract, validate_request
 
 
 class ContextResponseError(ValueError):
@@ -262,10 +263,8 @@ def contextual_answer(
         kwargs['response_format'] = planner_response_format()
     max_prompt_bytes = kwargs.pop('max_prompt_bytes', None)
     if context:
-        payload["context_tools"] = ["list_tree", "search_text", "read_file"]
-        payload["context_contract"] = (
-            "Solicita JSON context_request {op,path o query}; al terminar devuelve el contrato final solicitado."
-        )
+        payload["context_tools"] = TOOLS
+        payload["context_contract"] = context_contract()
     limit = context.policy.max_rounds if context else 1
     history = []
     for _ in range(limit):
@@ -290,10 +289,7 @@ def contextual_answer(
             if hasattr(models, 'mark_response'):
                 models.mark_response(role, response, 'invalid_contract')
             raise ContextResponseError(f"invalid_contract: El rol {role} devolvió un contrato inválido", 'invalid_contract')
-        request = value.get("context_request")
-        if request is not None and set(value) != {'context_request'}:
-            raise ContextResponseError('invalid_contract: solicitud de contexto mezclada con salida final', 'invalid_contract')
-        if request is None:
+        if 'context_request' not in value:
             if context_manager:
                 try:
                     context_manager.validate(role, value, payload)
@@ -302,11 +298,18 @@ def contextual_answer(
                         models.mark_response(role, response, 'invalid_contract')
                     raise ContextResponseError('invalid_contract: ' + str(error), 'invalid_contract') from error
             return value
-        if not context or not isinstance(request, dict):
-            raise ValueError("Solicitud de contexto inválida")
+        request = value['context_request']
         try:
-            if context_manager and set(value) != {'context_request'}:
-                raise ValueError('Campos de solicitud de contexto inválidos')
+            if set(value) != {'context_request'}:
+                raise ValueError('Solicitud de contexto mezclada con salida final')
+            validate_request(request)
+            if context is None:
+                raise ValueError('Contexto no habilitado para este rol/fase')
+        except ValueError as error:
+            if hasattr(models, 'mark_response'):
+                models.mark_response(role, response, 'invalid_contract')
+            raise ContextResponseError('invalid_contract: ' + str(error), 'invalid_contract') from error
+        try:
             result = context.request(request)
             fingerprint = context.fingerprint(request) if context_manager else None
             if context_manager and result.get('content') and result.get('sha256') and not result.get('truncated'):

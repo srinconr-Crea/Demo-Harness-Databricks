@@ -15,6 +15,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src/agents/harness'))
 from harness.client_config import profile_bytes, read_profile
+from harness.models import load_model_config
 
 
 def prepare(installation: str, profile_path: Path, environment_path: Path, *, root: Path = ROOT) -> Path:
@@ -37,6 +38,10 @@ def prepare(installation: str, profile_path: Path, environment_path: Path, *, ro
         raise ValueError('Faltan variables requeridas o se intentó sustituir el perfil entregado')
     if variables.get('sandbox_service_principal') == 'SET_DEDICATED_SANDBOX_SERVICE_PRINCIPAL':
         raise ValueError('Configurar la identidad sandbox dedicada')
+    routing, _, _ = load_model_config(root / 'src/agents/harness/config/defaults/models.yaml')
+    if (variables['sonnet_endpoint'] != routing['planner']
+            or variables['verifier_endpoint'] != routing['verifier']):
+        raise ValueError('Los endpoints de instalación no coinciden con el routing del producto')
     parent = root / '.deployments'
     if parent.is_symlink() or getattr(parent, 'is_junction', lambda: False)():
         raise ValueError('El destino no admite enlaces')

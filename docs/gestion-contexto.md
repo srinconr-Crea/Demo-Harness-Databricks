@@ -52,3 +52,27 @@ Snapshots completos viven en `context/<run_id>/<attempt_id>/<sha256>.json`, con 
 No se deduce automáticamente envenenamiento ni necesidad de sesión nueva a partir de un síntoma. La retención/borrado del volumen pertenece a operación humana y debe preservar intentos activos y PR pendientes. TTL de cache no es retención de memoria.
 
 Para rollback conservar el paquete y snapshot de despliegue previos. Deshabilitar afecta a intentos nuevos; los activos gestionados bajo otra política requieren retry explícito. Drenar los intentos activos antes de modificar la instalación. El estrés de 40 turnos es un escenario acotado; aceptación significa preservar decisiones y controles dentro del presupuesto, no duración ilimitada.
+
+## Solicitudes individuales de contexto
+
+El modelo solicita una sola operación por turno, exclusivamente mediante
+context_request como objeto. Las formas admitidas son:
+
+```json
+{"context_request":{"op":"list_tree"}}
+{"context_request":{"op":"read_file","path":"src/common/schema.py"}}
+{"context_request":{"op":"search_text","query":"normalize_table_name"}}
+```
+
+Cada línea corresponde a una respuesta distinta. list_tree no recibe path;
+search_text recibe solo op y query. Después del resultado puede solicitar otra
+operación o devolver el contrato final del rol sin context_request. Listas, null,
+campos adicionales y solicitudes mezcladas con salida final se rechazan antes
+de leer, con acceptance=invalid_contract y diagnóstico seguro.
+
+Los nuevos fallos de formato admiten Reintentar etapa por acción humana con
+identidad, failure_id, revisión, perfil, contexto, procedencia y checkpoint
+compatibles. Un reinicio no los reintenta automáticamente. Los históricos
+con retryable=false conservan su mensaje y estado; para repetir ese caso se
+presenta una HU nueva con planificación y aprobación propias. Política,
+permisos, presupuestos y tratamiento de denegaciones siguen vigentes.

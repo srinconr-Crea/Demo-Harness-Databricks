@@ -116,3 +116,21 @@ cliente desde `ui.display_name`, conservando HU y descripción como entrada.
 
 Consulta el [ejemplo NaturaPet](../examples/naturapet/README.md) para los valores
 del piloto. Las evidencias anteriores conservan su ubicación y significado.
+
+## Migración a Sonnet 5.5
+
+El producto exige databricks-claude-sonnet-5-5 en explorer, planner, developer y
+openspec_verifier. Haiku 4.5 permanece asesor. Entregar runtime, routing, tarifas
+y el recurso CAN_QUERY de la App juntos; no hay fallback automático a Sonnet 5.
+Los límites permanecen en 64000 para planner y fallback 12000 para otros roles.
+
+En CREA_DEV, Sonnet 5.5 rechazó JSON Schema en la prueba del 5 de octubre de 2026;
+json_schema=false conserva contratos textuales y validaciones estrictas. La
+[evidencia específica](evidence/2026-10-05-sonnet55/verification.md) describe
+compatibilidad y estimación de tarifas por región, sin atribuir permisos de la
+App al operador. Comprobar acceso con la identidad de la App antes de admitir HUs.
+
+Drenar trabajadores antes de migrar y conservar el paquete y source_code_path
+previos. Rollback restaura runtime, routing, tarifas y permisos del paquete
+anterior completo, sin borrar checkpoints ni sustituir procedencia/aprobaciones.
+La disponibilidad READY no equivale a verificación funcional o despliegue.

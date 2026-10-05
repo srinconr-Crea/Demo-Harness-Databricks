@@ -22,11 +22,11 @@ class FakeWorkspaceAPI:
 
 def test_model_router_uses_foundation_endpoint_and_records_tokens():
     api = FakeWorkspaceAPI({"choices": [{"message": {"content": "{\"ok\":true}"}}], "usage": {"prompt_tokens": 100, "completion_tokens": 20}})
-    client = ModelClient(api, {"analyst": "databricks-claude-sonnet-5"}, {"databricks-claude-sonnet-5": (Decimal("0.000003"), Decimal("0.000015"))})
+    client = ModelClient(api, {"analyst": "databricks-claude-sonnet-5-5"}, {"databricks-claude-sonnet-5-5": (Decimal("0.000003"), Decimal("0.000015"))})
     response = client.complete("analyst", "Analiza la HU")
     assert response.text == '{"ok":true}'
     assert response.cost_usd == Decimal("0.000600")
-    assert api.calls[0][1] == "/serving-endpoints/databricks-claude-sonnet-5/invocations"
+    assert api.calls[0][1] == "/serving-endpoints/databricks-claude-sonnet-5-5/invocations"
     assert "temperature" not in api.calls[0][2]
 
 
@@ -53,7 +53,7 @@ def test_model_call_preserves_stage_revision_and_approval_on_failure():
             raise RuntimeError("unavailable")
 
     saved = []
-    client = ModelClient(FailingAPI(), {"developer": "databricks-claude-sonnet-5"}, {},
+    client = ModelClient(FailingAPI(), {"developer": "databricks-claude-sonnet-5-5"}, {},
                          on_call=lambda _role, call: saved.append(call))
     with pytest.raises(RuntimeError):
         client.complete("developer", "apply", stage="applying", revision=3,
@@ -66,13 +66,13 @@ def test_model_call_preserves_stage_revision_and_approval_on_failure():
 def test_four_planner_calls_use_sonnet_and_each_reaches_json_sink():
     saved = []
     api = FakeWorkspaceAPI({"choices": [{"message": {"content": '{"content":"valid artifact"}'}}], "usage": {"prompt_tokens": 2, "completion_tokens": 3}})
-    model = "databricks-claude-sonnet-5"
+    model = "databricks-claude-sonnet-5-5"
     client = ModelClient(api, {"planner": model}, {model: (Decimal("0.1"), Decimal("0.2"))}, on_call=lambda role, call: saved.append((role, call)))
     for artifact in ("proposal", "specs", "design", "tasks"):
         client.complete("planner", artifact)
     assert len(saved) == 4
     assert all(role == "planner" and call.model == model and call.cost_usd == Decimal("0.8") for role, call in saved)
-    assert all(path == "/serving-endpoints/databricks-claude-sonnet-5/invocations" for _method, path, _body in api.calls)
+    assert all(path == "/serving-endpoints/databricks-claude-sonnet-5-5/invocations" for _method, path, _body in api.calls)
 
 
 def test_model_call_id_is_sent_before_invocation_and_input_output_are_recorded():
@@ -120,23 +120,23 @@ def test_nested_parsed_output_is_redacted_before_persistence():
 
 def test_model_config_is_keyed_by_endpoint_not_hardcoded_role_prices(tmp_path):
     path = tmp_path / "models.yaml"
-    path.write_text("routing:\n  planner: databricks-claude-sonnet-5\n  developer: custom-a\n  verifier: custom-b\npricing:\n  source: estimated\n  endpoints:\n    databricks-claude-sonnet-5: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n    custom-a: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n    custom-b: {input_usd_per_token: 0.3, output_usd_per_token: 0.4}\n", encoding="utf-8")
+    path.write_text("routing:\n  planner: databricks-claude-sonnet-5-5\n  explorer: databricks-claude-sonnet-5-5\n  openspec_verifier: databricks-claude-sonnet-5-5\n  developer: databricks-claude-sonnet-5-5\n  verifier: custom-b\npricing:\n  source: estimated\n  endpoints:\n    databricks-claude-sonnet-5-5: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n    custom-a: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n    custom-b: {input_usd_per_token: 0.3, output_usd_per_token: 0.4}\n", encoding="utf-8")
     routing, prices, source = load_model_config(path)
-    assert routing["developer"] == "custom-a"
+    assert routing["developer"] == "databricks-claude-sonnet-5-5"
     assert prices["custom-b"] == (Decimal("0.3"), Decimal("0.4"))
     assert source == "estimated"
 
 
-def test_planner_model_is_fixed_to_sonnet_five(tmp_path):
+def test_planner_model_is_fixed_to_sonnet_five_five(tmp_path):
     path = tmp_path / "models.yaml"
     path.write_text("routing:\n  planner: other-model\n  developer: other-model\n  verifier: other-model\npricing:\n  source: estimated\n  endpoints:\n    other-model: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n", encoding="utf-8")
     with pytest.raises(ValueError, match="planner"):
         load_model_config(path)
 
 
-def test_all_openspec_roles_route_to_sonnet_five(tmp_path):
+def test_all_openspec_roles_route_to_sonnet_five_five(tmp_path):
     path = tmp_path / "models.yaml"
-    path.write_text("routing:\n  planner: databricks-claude-sonnet-5\n  developer: databricks-claude-sonnet-5\n  verifier: databricks-claude-haiku-4-5\n  explorer: wrong-model\n  openspec_verifier: databricks-claude-sonnet-5\npricing:\n  source: estimated\n  endpoints:\n    databricks-claude-sonnet-5: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n    databricks-claude-haiku-4-5: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n    wrong-model: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n", encoding="utf-8")
+    path.write_text("routing:\n  planner: databricks-claude-sonnet-5-5\n  developer: databricks-claude-sonnet-5-5\n  verifier: databricks-claude-haiku-4-5\n  explorer: wrong-model\n  openspec_verifier: databricks-claude-sonnet-5-5\npricing:\n  source: estimated\n  endpoints:\n    databricks-claude-sonnet-5-5: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n    databricks-claude-haiku-4-5: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n    wrong-model: {input_usd_per_token: 0.1, output_usd_per_token: 0.2}\n", encoding="utf-8")
     with pytest.raises(ValueError, match="OpenSpec"):
         load_model_config(path)
 
@@ -147,11 +147,28 @@ def test_runtime_logging_limits_are_loaded_from_yaml(tmp_path):
     assert load_runtime_config(path)["logging"]["max_text_chars"] == 1200
 
 
+@pytest.mark.parametrize('role', ['explorer', 'planner', 'developer', 'openspec_verifier'])
+@pytest.mark.parametrize('endpoint', [None, 'databricks-claude-sonnet-5', 'other-model'])
+def test_sonnet55_requires_explicit_current_routing_for_every_mandatory_role(tmp_path, role, endpoint):
+    import yaml
+    from pathlib import Path
+    product = Path(__file__).resolve().parents[1] / 'src/agents/harness/config/defaults/models.yaml'
+    config = yaml.safe_load(product.read_text())
+    if endpoint is None:
+        config['routing'].pop(role)
+    else:
+        config['routing'][role] = endpoint
+    path = tmp_path / 'models.yaml'
+    path.write_text(yaml.safe_dump(config))
+    with pytest.raises(ValueError):
+        load_model_config(path)
+
+
 def test_model_normalizes_text_blocks_from_foundation_api():
     api = FakeWorkspaceAPI({"choices": [{"message": {"content": [
         {"type": "text", "text": '{"valid": true}'},
     ]}}], "usage": {"prompt_tokens": 1, "completion_tokens": 2}})
-    client = ModelClient(api, {"analyst": "databricks-claude-sonnet-5"}, {})
+    client = ModelClient(api, {"analyst": "databricks-claude-sonnet-5-5"}, {})
     assert client.complete("analyst", "Analiza").text == '{"valid": true}'
 
 
