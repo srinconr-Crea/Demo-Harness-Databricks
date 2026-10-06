@@ -89,6 +89,7 @@ def models_factory(run_id: str, attempt_id: str):
                 {'kind': 'model_response', 'call_id': response.call_id,
                  'original': response.text, 'normalized': response.normalized_text}),
             stage=response.stage, revision=response.revision,
+            candidate_revision=response.candidate_revision, candidate_hash=response.candidate_hash,
             approved_sha256=response.approved_sha256,
             instruction_provenance=response.instruction_provenance,
             context_provenance=response.context_provenance,

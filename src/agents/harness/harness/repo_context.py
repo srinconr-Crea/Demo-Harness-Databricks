@@ -60,6 +60,8 @@ def planner_response_format():
             'content': {'type': 'string'}, 'summary': {'type': 'string'},
             'manifest': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False,
                 'properties': {'op': {'type': 'string'}, 'path': {'type': 'string'}}, 'required': ['op', 'path']}},
+            'capabilities': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False,
+                'properties': {'kind': {'type': 'string', 'enum': ['new', 'modified']}, 'path': {'type': 'string'}}, 'required': ['kind', 'path']}},
             'context_request': {'type': 'object', 'additionalProperties': False, 'properties': {
                 'op': {'type': 'string'}, 'path': {'type': 'string'}, 'query': {'type': 'string'}}, 'required': ['op']},
             'strategy': {'type': 'string'}, 'code_path': {'type': 'string'}, 'expression': {'type': 'string'}},
@@ -182,12 +184,14 @@ def parse_response(models, role, response, serialized, kwargs, *, allow_repair=T
 
 
 class RepoContext:
-    def __init__(self, root: Path, profile, *, cache=None, identity=None):
+    def __init__(self, root: Path, profile, *, cache=None, identity=None, on_result=None):
         self.root, self.profile = root, profile
         self.policy = profile.repository_policy
         self.reads = self.searches = self.used = self.requests = 0
         self.deadline = time.monotonic() + self.policy.timeout_seconds
+        self.elapsed_seconds = 0.0
         self.cache, self.identity = cache, identity
+        self.on_result = on_result
 
     def fingerprint(self, request):
         from .prompt_contracts import validate_request
@@ -251,6 +255,20 @@ class RepoContext:
         }
 
     def request(self, request):
+        started = time.monotonic()
+        remaining = self.policy.timeout_seconds - self.elapsed_seconds
+        if remaining <= 0:
+            raise ValueError('Límite de tiempo del contexto')
+        self.deadline = started + remaining
+        try:
+            result = self._request_with_cache(request)
+        finally:
+            self.elapsed_seconds += time.monotonic() - started
+        if self.elapsed_seconds > self.policy.timeout_seconds:
+            raise ValueError('Límite de tiempo del contexto')
+        return result
+
+    def _request_with_cache(self, request):
         from .prompt_contracts import validate_request
         validate_request(request)
         key = self.fingerprint(request) if self.cache else None
@@ -269,10 +287,14 @@ class RepoContext:
             if self.used + size > self.policy.max_context_bytes:
                 return {'truncated': True, 'reason': 'max_context_bytes'}
             self.used += size
+            if self.on_result:
+                self.on_result(cached)
             return cached
         result = self._request(request)
         if self.cache:
             self.cache.put(key, result)
+        if self.on_result:
+            self.on_result(result)
         return result
 
     def _request(self, request):
@@ -330,6 +352,11 @@ def contextual_answer(
     models, role, prompt: dict, context: RepoContext | None = None, *, context_manager=None, phase=None, profile=None, **kwargs
 ):
     payload = dict(prompt)
+    if profile is not None and not context_manager and phase is not None:
+        from .prompt_contracts import PromptContracts
+        system, provenance = PromptContracts().compose(role, phase)
+        kwargs['system_prompt'] = '\n'.join(filter(None, [kwargs.get('system_prompt'), system]))
+        kwargs.setdefault('context_provenance', {'prompt': provenance, 'context_management_enabled': False})
     final_validator = None
     recovery_validator = None
     if role == 'planner' and payload.get('artifact') in {'proposal', 'specs', 'design', 'tasks'} and 'template' in payload:
@@ -389,6 +416,9 @@ def contextual_answer(
                     if role == 'planner' or isinstance(error, ArtifactPresentationError):
                         raise
                     raise ContextResponseError('invalid_contract: ' + str(error), 'invalid_contract') from error
+            elif profile is not None and role in {'developer', 'openspec_verifier'}:
+                from .prompt_contracts import validate_output
+                validate_output(role, value, payload, profile)
             return value
         request = value['context_request']
         try:

@@ -278,6 +278,10 @@ def test_policy_change_blocks_actions_retry_does_not_inherit_approval(tmp_path):
 def test_legacy_does_not_get_fabricated_management(tmp_path):
     engine, *_ = make_engine(tmp_path)
     run = engine.submit(StoryRequest(hu='HU', description='VALUE a 2'), actor='human')
+    record = engine.store.load(run)
+    record['attempts'][-1]['context'].pop('context_management')
+    record['attempts'][-1]['context'].pop('workflow_version')
+    engine.store.save(run, record)
     assert 'context_management' not in engine.get(run)['attempts'][-1]['context']
 
 

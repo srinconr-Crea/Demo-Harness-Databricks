@@ -83,7 +83,7 @@ def test_prompt_fields_and_serialization_example(tmp_path):
         assert set(planner_artifact_output(artifact, engine.profile)) == {'content'}
     prompt, provenance = PromptContracts().compose('planner', 'propose')
     assert 'Nunca incluyas rutas OpenSpec' in prompt and 'una sola vez' in prompt
-    assert provenance['version'] == 'role-contracts-v4'
+    assert provenance['version'] == 'role-contracts-v5'
 
 
 @pytest.mark.parametrize('enabled', [False, True])

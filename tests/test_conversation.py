@@ -77,11 +77,13 @@ class FakeCLI:
 
     def archive(self, root, name):
         change = root / "openspec" / "changes" / name
+        for delta in (change / 'specs').rglob('spec.md'):
+            destination = root / 'openspec' / 'specs' / delta.relative_to(change / 'specs')
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(delta.read_bytes())
         archive = root / "openspec" / "changes" / "archive" / name
         archive.parent.mkdir(parents=True, exist_ok=True)
         change.rename(archive)
-        (root / "openspec" / "specs" / name).mkdir(parents=True)
-        (root / "openspec" / "specs" / name / "spec.md").write_text("# Synced\n", encoding="utf-8")
 
 
 class FakeModels:
@@ -103,10 +105,13 @@ class FakeModels:
                 "design": "# Design\n\n## Context\nCódigo cliente.\n\n## Decisions\nCambiar función.\n",
                 "tasks": "# Tasks\n\n- [ ] 1.1 Cambiar función y verificar salida.\n",
             }[artifact]}
+            if artifact == 'proposal':
+                value['capabilities'] = [{'kind': 'new', 'path': 'value-output'}]
         elif role == "developer":
             previous = b"VALUE = 2\n" if "VALUE = 2" in json.loads(prompt).get("source_summary", "") else b"VALUE = 1\n"
             value = {"operations": [{"op": "modify", "path": "src/value.py", "content": "VALUE = 2\n",
-                                      "expected_sha256": hashlib.sha256(previous).hexdigest()}], "notes": "Cambio aplicado"}
+                                      "expected_sha256": hashlib.sha256(previous).hexdigest()}],
+                     "coverage": [{'path': 'src/value.py', 'status': 'applied'}], "notes": "Cambio aplicado"}
         else:
             value = {"approved": True, "findings": []}
         return type("Response", (), {"text": json.dumps(value, ensure_ascii=False)})()
@@ -143,6 +148,19 @@ def make_engine(tmp_path: Path):
                                 lambda _root, _profile, _paths, _record, _attempt: {"passed": True, "evidence": ["synthetic test passed"]})
     engine.publication_mode = 'diff_review'  # Exercise the persisted historical modality in these tests.
     return engine, github, models, store, coordinator, profile
+
+
+@pytest.fixture(autouse=True)
+def historical_workflow_contract(monkeypatch):
+    """These original modality tests exercise persisted attempts predating routing."""
+    original = ConversationEngine._new_context
+
+    def historical_context(engine):
+        context = original(engine)
+        context.pop('workflow_version', None)
+        return context
+
+    monkeypatch.setattr(ConversationEngine, '_new_context', historical_context)
 
 
 def test_full_conversation_waits_for_both_human_approvals(tmp_path: Path):

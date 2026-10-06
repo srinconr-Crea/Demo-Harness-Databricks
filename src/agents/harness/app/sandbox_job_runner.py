@@ -69,15 +69,23 @@ def run(input_path: str, result_path: str, archive_sha256: str, test_paths: list
                 raise ValueError('CLI Databricks no disponible en el Job dedicado')
             commands.append([executable, 'bundle', 'validate', '--strict', '-t', bundle_target])
         outputs, passed = [], True
+        failure_category, failure_code = None, None
         for command in commands:
             try:
                 completed = subprocess.run(command, cwd=root, env=environment, capture_output=True,
                                            text=True, timeout=600, check=False)
                 outputs.append((completed.stdout + '\n' + completed.stderr)[-6000:])
                 passed &= completed.returncode == 0
+                if completed.returncode != 0:
+                    # Exit 1 is a completed test failure; collection/configuration is inconclusive.
+                    category = 'implementation' if command[0] == sys.executable and completed.returncode == 1 and 'failed' in completed.stdout else 'infrastructure_evidence'
+                    if failure_category != 'infrastructure_evidence':
+                        failure_category = category
+                        failure_code = 'pytest_failed' if category == 'implementation' else 'runner_inconclusive'
             except subprocess.TimeoutExpired:
                 outputs.append('Las pruebas excedieron 600 segundos')
                 passed = False
+                failure_category, failure_code = 'infrastructure_evidence', 'sandbox_timeout'
         output = '\n'.join(outputs)[-6000:]
     result = {
         "run_id": source.parent.parent.parent.name,
@@ -85,6 +93,7 @@ def run(input_path: str, result_path: str, archive_sha256: str, test_paths: list
         "archive_sha256": archive_sha256,
         "passed": passed,
         "evidence": [output],
+        'failure_category': failure_category, 'failure_code': failure_code,
     }
     temporary = destination.with_suffix(".tmp")
     temporary.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")

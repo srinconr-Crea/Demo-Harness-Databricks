@@ -116,13 +116,16 @@ def validate_planner_output(value, payload, profile=None):
                 or not profile.allows(result['code_path'])):
             raise ValueError('El manifiesto del planner excede la política validada')
     else:
-        if (not isinstance(value, dict) or set(value) - {'content', 'summary', 'manifest'}
+        if (not isinstance(value, dict) or set(value) - {'content', 'summary', 'manifest', 'capabilities'}
                 or not isinstance(value.get('content'), str) or not 20 <= len(value['content']) <= 50000):
             raise ValueError('Contrato del artefacto inválido')
         if payload.get('artifact') == 'proposal' and profile and profile.general_patch:
             if not isinstance(value.get('summary'), str) or not 1 <= len(value['summary']) <= 10000:
                 raise ValueError('Propuesta requiere manifiesto')
             validate_planner_manifest(value.get('manifest'), profile)
+        if payload.get('artifact') == 'proposal' and 'capability_inventory' in payload:
+            from .capability_contract import validate_capabilities
+            validate_capabilities(value.get('capabilities'), payload['capability_inventory'])
     validate_artifact_content(value['content'], payload)
 
 
@@ -204,9 +207,9 @@ def validate_output(role, value, payload, profile):
         validate_planner_output(value, payload, profile)
     elif role == 'developer':
         if profile.general_patch:
-            if set(value) - {'operations', 'notes'} or not isinstance(value.get('operations'), list):
+            if set(value) - {'operations', 'notes', 'coverage'} or not isinstance(value.get('operations'), list):
                 raise ValueError('Operaciones inválidas')
-            if not 1 <= len(value['operations']) <= profile.general_patch.max_files:
+            if not 0 <= len(value['operations']) <= profile.general_patch.max_files:
                 raise ValueError('Límite de operaciones')
             for item in value['operations']:
                 if not isinstance(item, dict) or set(item) - {'op', 'path', 'content', 'expected_sha256'}:
@@ -214,14 +217,26 @@ def validate_output(role, value, payload, profile):
                 operation = FileOperation.model_validate(item)
                 if not profile.allows_code(operation.path):
                     raise ValueError('Operación fuera del perfil')
-            # Exact approved-manifest comparison remains at the existing transition.
+            if payload.get('workflow_version') == 'classified-corrections-v1':
+                from .patch import ManifestCoverage
+                coverage = value.get('coverage')
+                if not isinstance(coverage, list) or len(coverage) > profile.general_patch.max_files:
+                    raise ValueError('Cobertura inválida')
+                for item in coverage:
+                    ManifestCoverage.model_validate(item)
         elif set(value) - {'expression', 'notes'} or not isinstance(value.get('expression'), str) or not 1 <= len(value['expression']) <= 500:
             raise ValueError('Expresión inválida')
     else:
+        classified = role == 'openspec_verifier' and payload.get('workflow_version') == 'classified-corrections-v1'
         if (role not in {'openspec_verifier', 'verifier'} or set(value) - {'approved', 'findings', 'notes'}
                 or type(value.get('approved')) is not bool or not isinstance(value.get('findings'), list)
-                or len(value['findings']) > 100 or any(not isinstance(f, str) or len(f) > 10000 for f in value['findings'])):
+                or len(value['findings']) > 100 or (not classified and any(not isinstance(f, str) or len(f) > 10000 for f in value['findings']))):
             raise ValueError('Contrato de verificación inválido')
+        if classified:
+            from .failure_routing import parse_findings
+            parse_findings(value['findings'])
+            if bool(value['findings']) == value['approved']:
+                raise ValueError('Aprobación y hallazgos bloqueantes contradictorios')
     if 'notes' in value and (not isinstance(value['notes'], str) or len(value['notes']) > 10000):
         raise ValueError('Notas inválidas')
     if len(json.dumps(value, ensure_ascii=False).encode('utf-8')) > 2097152:

@@ -98,4 +98,5 @@ class SandboxJobRunner:
                 or result.get("run_id") != run_id or result.get("attempt_id") != attempt_id):
             raise ValueError("El resultado del Job sandbox no coincide con el candidato")
         return {"passed": result.get("passed") is True, "evidence": result.get("evidence") or [],
+                'failure_category': result.get('failure_category'), 'failure_code': result.get('failure_code'),
                 "job_run_id": job_run_id, "archive_sha256": archive_sha}

@@ -68,6 +68,7 @@
       <p class="muted">HU: <strong id="story-id"></strong> · Revisión <span id="revision"></span></p>
       <div id="messages" aria-live="polite"></div>
       <div id="checklist" aria-live="polite"></div>
+      <div id="correction" aria-live="polite"></div>
       <div id="advisory"></div>
       <div id="review" class="review" hidden>
         <h3 id="review-title"></h3>
@@ -98,10 +99,16 @@ const feedback=document.getElementById('feedback'), feedbackLabel=document.getEl
 feedback.addEventListener('input',()=>{if(runId){sessionStorage.setItem(runId+':feedback',feedback.value);sessionStorage.setItem(runId+':'+current?.attempts.at(-1).revision+':feedback',feedback.value);}});
 document.getElementById('consult-diff').addEventListener('click',showDiff);
 let runId=new URLSearchParams(location.search).get('run'), current=null, eventCursor=0, timer=null, lastReviewKey='', lastLiveArtifactKey='';
-const stageLabels={queued:'En cola',running:'En proceso',exploring:'Explorando la HU',awaiting_clarification:'Esperando aclaración',proposing:'Preparando el plan',awaiting_plan_review:'Esperando revisión del plan',updating:'Actualizando el plan',applying:'Aplicando cambios',verifying:'Verificando',preparing_final_diff:'Preparando el diff',awaiting_diff_review:'Esperando revisión del diff',publishing:'Creando el PR',complete:'Completado',failed:'Falló',cancelled:'Cancelado'};
+const stageLabels={queued:'En cola',running:'En proceso',exploring:'Explorando la HU',awaiting_clarification:'Esperando aclaración',proposing:'Preparando el plan',awaiting_plan_review:'Esperando revisión del plan',updating:'Actualizando el plan',applying:'Aplicando cambios',correcting:'Corrigiendo implementación',verifying:'Verificando',preparing_final_diff:'Preparando el diff',awaiting_diff_review:'Esperando revisión del diff',publishing:'Creando el PR',complete:'Completado',failed:'Falló',cancelled:'Cancelado'};
 const eventLabels={explore:'Exploración',clarification:'Respuesta recibida',artifact_ready:'Artefacto disponible',propose:'Plan preparado',update:'Plan actualizado',plan_changes:'Cambios pedidos al plan',plan_approved:'Plan aprobado',apply:'Cambios aplicados',verify:'Verificación',verify_failed:'Se requiere una corrección',sync:'Specs sincronizados',archive:'Cambio OpenSpec archivado',diff_ready:'Diff listo para revisión',diff_changes:'Cambios pedidos al diff',diff_approved:'Diff aprobado',pr_created:'PR creado',error:'Error de la etapa',base_advanced:'La rama base cambió'};
 eventLabels.publication_complete='Publicación completada';
 eventLabels.verify_findings='Hallazgos de verificación';
+eventLabels.correcting='Corrección de implementación';
+eventLabels.correction_started='Corrección de implementación';
+eventLabels.correction_complete='Corrección aplicada';
+eventLabels.failure_classified='Causa de verificación y continuación';
+eventLabels.no_progress='Bloqueo repetido sin progreso';
+const categoryLabels={implementation:'Implementación',scope_spec:'Especificación o alcance',infrastructure_evidence:'Infraestructura o evidencia',harness_defect:'Defecto del harness'};
 function actionStatus(text,isError=false){const target=document.getElementById('action-error');target.className=isError?'error':'muted';target.textContent=text;}
 function eventDescription(event){const d=event.details||{};if(d.summary)return d.summary;if(d.text)return d.text;if(d.message)return d.message;if(event.kind==='artifact_ready')return d.path||'Archivo disponible para revisión.';if(event.kind==='verify'||event.kind==='verify_failed'){const evidence=d.evidence||{};return (evidence.passed?'Las pruebas y verificaciones pasaron.':'Las pruebas requieren una corrección.')+'\n'+(evidence.evidence||[]).join('\n');}if(event.kind==='verify_findings')return (d.findings||[]).map(item=>typeof item==='string'?item:item.message||item.description||JSON.stringify(item)).join('\n');if(event.kind==='apply')return (d.paths||[]).join('\n');if(event.kind==='diff_ready')return 'Revisa el código y OpenSpec antes de permitir la creación del PR.';if(event.kind==='plan_approved'||event.kind==='diff_approved')return 'Aprobación registrada para esta revisión.';if(event.kind==='propose'||event.kind==='update')return 'Propuesta, specs, diseño y tareas disponibles para revisión.';if(event.kind==='sync')return 'Las especificaciones del cliente reflejan el cambio verificado.';if(event.kind==='archive')return 'El historial OpenSpec forma parte del diff final.';if(event.kind==='pr_created'||event.kind==='publication_complete')return d.pr_url||'El PR queda pendiente de revisión humana.';return 'Etapa registrada.';}
 
@@ -180,8 +187,8 @@ async function poll() {
   if(!runId) return;
   try {
     const run=await jsonRequest('/runs/'+runId);current=run;document.getElementById('conversation').hidden=false;
-    const attempt=run.attempts.at(-1);stateEl.textContent=stageLabels[run.state]||run.state;document.getElementById('story-id').textContent=run.story_id;document.getElementById('revision').textContent=attempt.revision;
-    showMessages(attempt);showReview(run);showLiveArtifacts(attempt);await showCalls();showChecklist(run);
+    const attempt=run.attempts.at(-1);stateEl.textContent=stageLabels[attempt.stage]||stageLabels[run.state]||run.state;document.getElementById('story-id').textContent=run.story_id;document.getElementById('revision').textContent=attempt.revision;
+    showMessages(attempt);showReview(run);showLiveArtifacts(attempt);await showCalls();showChecklist(run);showCorrection(attempt);
     const page=await jsonRequest('/runs/'+runId+'/events?after='+eventCursor+'&limit=100');
     for(const event of page.events){const card=node('div',undefined,'event');card.append(node('strong',(eventLabels[event.kind]||event.kind)+' · Revisión '+event.revision));card.append(node('span',eventDescription(event)));const data=node('details');data.append(node('summary','Ver datos de la etapa'),node('pre',JSON.stringify(event.details||{},null,2)));card.append(data);eventsEl.append(card);}eventCursor=page.next;
     const publication=document.getElementById('publication');publication.replaceChildren();
@@ -207,9 +214,28 @@ form.addEventListener('submit',async event=>{event.preventDefault();const submit
 function showChecklist(run){
   const target=document.getElementById('checklist');target.replaceChildren();
   const labels={ok:'OK',pending:'Pendiente',running:'En curso',failed:'Falló',blocked:'Esperando respuesta',not_applicable:'No aplica'};
-  for(const item of run.checklist||[]){const date=item.at?new Date(item.at).toLocaleString('es-CO',{timeZone:'America/Bogota'}):'—';target.append(node('p',item.phase+': '+(labels[item.status]||item.status)+' · '+date));}
+  const attempt=run.attempts.at(-1), candidate=attempt.context?.code_candidate_hash;
+  const testsStale=Boolean(candidate&&(attempt.context?.tests||attempt.tests)?.candidate_hash!==candidate);
+  for(const item of run.checklist||[]){const date=item.at?new Date(item.at).toLocaleString('es-CO',{timeZone:'America/Bogota'}):'—';const status=item.phase==='verify'&&(attempt.stage==='correcting'||testsStale)&&item.status==='ok'?'pending':item.status;target.append(node('p',item.phase+': '+(labels[status]||status)+' · '+date));}
   const advice=run.attempts.at(-1).context?.advisory;const area=document.getElementById('advisory');area.replaceChildren();
   if(advice){const detail=node('details');detail.append(node('summary','Recomendaciones de Haiku · '+(advice.status==='complete'?'Revisión asesora':'No disponible')));for(const finding of advice.findings||[])detail.append(node('p',typeof finding==='string'?finding:JSON.stringify(finding)));area.append(detail);}
+}
+function showCorrection(attempt){
+  const target=document.getElementById('correction');target.replaceChildren();
+  const events=(attempt.timeline||[]).filter(event=>['correcting','correction_started','correction_complete','verify_failed','failure_classified','no_progress'].includes(event.kind));
+  const classified=events.filter(event=>event.kind==='failure_classified').at(-1);
+  const details=classified?.details||events.at(-1)?.details||{};
+  if(attempt.stage!=='correcting'&&!events.some(event=>['correcting','correction_started','correction_complete'].includes(event.kind)||event.kind==='failure_classified'&&event.details?.route==='correcting'))return;
+  const count=attempt.context?.implementation_correction_count;
+  target.append(node('p',(attempt.stage==='correcting'?'Corrección en curso':'Corrección registrada')+(count!==undefined?' · '+count+' de 2':'')+' · Revisión del plan '+attempt.revision));
+  const categories=[...new Set([details.category||details.failure_category,...(details.findings||[]).map(item=>item.category)].filter(Boolean))];
+  if(categories.length)target.append(node('p','Causa: '+categories.map(category=>categoryLabels[category]||category).join(', ')));
+  const reason=details.reason||details.message||details.summary;
+  if(reason)target.append(node('p',reason));
+  for(const finding of details.findings||[])target.append(node('p',[finding.criterion,finding.message||finding.code].filter(Boolean).join(': ')));
+  const revision=attempt.context?.candidate_revision;
+  if(revision!==undefined)target.append(node('p','Candidato '+revision));
+  if(attempt.stage==='correcting'||(attempt.context?.code_candidate_hash&&(attempt.context?.tests||attempt.tests)?.candidate_hash!==attempt.context.code_candidate_hash))target.append(node('p','Verificación pendiente del candidato actual. Los resultados anteriores se conservan en el historial.'));
 }
 fetch('/configuration').then(response=>response.json()).then(config=>{document.getElementById('project-name').textContent=config.ui?.display_name||config.profile||'el cliente configurado';}).catch(()=>{});
 if(runId) poll();

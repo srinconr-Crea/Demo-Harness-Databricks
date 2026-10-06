@@ -97,7 +97,10 @@ def test_generic_proposal_can_be_updated_and_strictly_validated(tmp_path: Path):
                 "design": "# Design\n\n## Context\nCliente de prueba.\n\n## Goals / Non-Goals\nGenerar reporte.\n\n## Decisions\nAñadir función.\n\n## Risks / Trade-offs\nRequiere pruebas.\n",
                 "tasks": "# Tasks\n\n## 1. Reporte\n\n- [ ] 1.1 Implementar y probar el reporte del cliente.\n",
             }
-            return type("Response", (), {"text": json.dumps({"content": contents[artifact]})})()
+            value = {"content": contents[artifact]}
+            if artifact == 'proposal':
+                value['capabilities'] = [{'kind': 'new', 'path': 'add-report'}]
+            return type("Response", (), {"text": json.dumps(value)})()
 
     request = StoryRequest(hu="HU-12", description="Añadir reporte")
     first = propose_client_change(cli, root, "add-report", request, Model())

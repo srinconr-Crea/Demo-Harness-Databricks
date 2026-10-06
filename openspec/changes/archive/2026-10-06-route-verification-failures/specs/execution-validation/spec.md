@@ -1,53 +1,4 @@
-# Execution Validation Specification
-
-## Purpose
-
-Establecer los controles que deben pasar antes de publicar un cambio de código cliente.
-
-## Requirements
-
-### Requirement: Secuencia de controles
-El harness SHALL exigir checkout autorizado, OpenSpec preexistente, plan validado y aprobado por una persona, desarrollo registrado, pruebas pertinentes y verificación Sonnet contra los specs. La aprobación vigente del plan SHALL autorizar publicación automática después de sync y archive, sin aprobación humana adicional del diff. Desarrollador y verificador SHALL usar la misma revisión aprobada; apply SHALL ejecutar tareas aprobadas.
-
-#### Scenario: Todos los controles aprobados
-- **WHEN** pasan controles obligatorios y existe autorización vigente del plan
-- **THEN** el flujo continúa automáticamente a publicación
-
-#### Scenario: Control rechazado
-- **WHEN** un control obligatorio falla o entrega salida inválida
-- **THEN** no se publica y se registra corrección o fallo
-
-#### Scenario: Planificación rechazada
-- **WHEN** el plan no valida, contradice política o carece de aprobación
-- **THEN** no se invoca al desarrollador
-
-#### Scenario: Inicialización rechazada
-- **WHEN** la base carece de OpenSpec válido
-- **THEN** no se desarrolla ni publica
-
-#### Scenario: Verificación contra la especificación
-- **WHEN** el código supera controles de estrategia
-- **THEN** Sonnet contrasta diff y pruebas con los specs de la revisión aprobada
-
-### Requirement: Sandbox sintético aislado
-
-La validación remota de `silver_safe_ratio` SHALL comprobar tres filas sintéticas en el SQL warehouse configurado: denominador positivo, cero y NULL.
-
-#### Scenario: Resultados esperados
-- **WHEN** la expresión devuelve el cociente para un denominador positivo y NULL para cero o NULL
-- **THEN** la prueba remota aprueba
-
-#### Scenario: Resultado incompleto o erróneo
-- **WHEN** faltan filas, la consulta falla o el resultado no coincide
-- **THEN** la prueba remota rechaza el cambio
-
-### Requirement: Alcance explícito de la prueba
-
-El reporte de validación SHALL distinguir la prueba SQL sintética de una ejecución completa del notebook del cliente.
-
-#### Scenario: Resumen previo al PR
-- **WHEN** el harness prepara el resumen de publicación
-- **THEN** informa que la prueba SQL no ejecutó el notebook completo
+## MODIFIED Requirements
 
 ### Requirement: Verificación específica y ciclo de corrección
 Cada tipo e impacto de cambio SHALL disponer de controles deterministas y pruebas funcionales pertinentes configurados por el operador, además de verificación OpenSpec obligatoria Sonnet. SHALL seleccionar adaptadores sobre el diff acumulado del candidato respecto de la base y sus componentes afectados. Un descuadre obligatorio SHALL conservar evidencia y clasificarse antes de continuar: implementación dentro del contrato aprobado, especificación/alcance, infraestructura/evidencia o defecto del harness. La clasificación del modelo SHALL ser una propuesta validada por el harness, sin conferir permisos. Un error de implementación corregible dentro del plan y manifiesto vigentes SHALL pasar a correcting y después a validación técnica y verificación Sonnet, sin planner ni nueva aprobación. Un cambio requerido del contrato autorizado SHALL pasar a update, validar una nueva revisión y esperar aprobación humana antes de apply. Infraestructura indisponible, evidencia insuficiente, clasificación ambigua y defectos del harness SHALL admitir solo recuperación acotada compatible con los controles existentes o detenerse con diagnóstico, sin publicar ni generar planes repetidos. Hallazgos mezclados que requieran cambiar lo autorizado SHALL impedir la corrección dependiente hasta nueva aprobación. Denegaciones de política y respuestas inválidas SHALL mantener sus controles de rechazo y no convertirse en correcciones de implementación por conveniencia.
@@ -92,35 +43,7 @@ Cada tipo e impacto de cambio SHALL disponer de controles deterministas y prueba
 - **WHEN** se elimina un archivo de un componente
 - **THEN** se ejecutan las pruebas configuradas de ese componente y se comprueban referencias pertinentes
 
-### Requirement: Adaptadores pertinentes y aislados
-El harness SHALL soportar python_compile, pytest_sandbox, sql_lint, yaml_validate, json_validate, notebook_validate, databricks_bundle_validate, toml_validate, markdown_structure y validación básica de texto. SHALL validar SQL con dialecto Databricks, notebooks según lenguaje y magias, y datos contra esquemas cuando se configuren. Código cliente y herramientas capaces de ejecutar su configuración SHALL operar en el Job con identidad separada, comandos confiables, límites y sin secretos de la App. Validar un bundle no SHALL desplegarlo. Pruebas remotas SHALL usar exclusivamente recursos demo_harness_* y el warehouse sintético autorizado.
-
-#### Scenario: Notebook con magias
-- **WHEN** un notebook usa Python, SQL o magias admitidas
-- **THEN** se valida su estructura y lenguaje sin compilar indiscriminadamente todas las celdas como Python
-
-#### Scenario: Bundle afectado
-- **WHEN** cambian databricks.yml, includes o recursos referenciados
-- **THEN** se valida el bundle completo del target autorizado sin deploy
-
-#### Scenario: Sintaxis sin prueba funcional
-- **WHEN** un cambio ejecutable compila pero su prueba funcional requerida falta o falla
-- **THEN** no se considera suficiente la sintaxis para publicar
-
-### Requirement: Revisión Haiku asesora
-La revisión independiente con Haiku 4.5 SHALL ser asesora. Hallazgos, rechazo, timeout, respuesta inválida o indisponibilidad SHALL registrarse sin impedir continuación ni consumir correcciones. SHALL conservar llamadas y uso disponible; la ausencia de revisión no SHALL presentarse como aprobación.
-
-#### Scenario: Recomendaciones
-- **WHEN** Haiku rechaza un candidato que pasa controles obligatorios
-- **THEN** continúa el flujo y conserva recomendaciones visibles
-
-#### Scenario: Fallo de Haiku
-- **WHEN** la llamada falla o devuelve JSON inválido
-- **THEN** se registra estado no disponible o error sin bloquear la HU
-
-#### Scenario: Fallo obligatorio con Haiku favorable
-- **WHEN** Haiku aprueba pero fallan pruebas o Sonnet
-- **THEN** se bloquea publicación
+## ADDED Requirements
 
 ### Requirement: Correcciones automáticas finitas y con progreso
 El harness SHALL admitir como máximo dos invocaciones automáticas de corrección de implementación por intento, compartidas entre validación técnica y Sonnet, con contador persistente que no se reinicia por update, cambio de etapa o reinicio. SHALL detenerse antes de una tercera corrección. SHALL detectar la repetición del mismo bloqueo sin cambios pertinentes del candidato, contrato autorizado o evidencia nueva relevante, incluyendo ciclos de apply/update, y detenerse antes de otra regeneración o corrección equivalente. Una redacción distinta, timestamp, nueva aprobación del mismo alcance o nuevo identificador de llamada no SHALL contar como progreso. La recuperación acotada de evidencia SHALL conservar los presupuestos existentes y no permitir llamadas indefinidas. El rechazo asesor Haiku no SHALL consumir este presupuesto.

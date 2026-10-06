@@ -1,6 +1,6 @@
 """Evidence-derived progress; no success inferred from a later phase."""
 
-PHASES = ["explore", "propose", "update", "apply", "verify", "sync", "archive", "PR"]
+PHASES = ["explore", "propose", "update", "apply", "correcting", "verify", "sync", "archive", "PR"]
 STAGES = {
     "exploring": "explore",
     "awaiting_clarification": "explore",
@@ -8,6 +8,7 @@ STAGES = {
     "awaiting_plan_review": "propose",
     "updating": "update",
     "applying": "apply",
+    "correcting": "correcting",
     "verifying": "verify",
     "preparing_final_diff": "archive",
     "publishing": "PR",
@@ -37,7 +38,12 @@ def checklist(attempt):
         event = candidates[-1] if candidates else None
         active = STAGES.get(attempt.get("stage")) == phase
         state = "ok" if event else ("running" if active else "pending")
-        if phase == "update" and not any(e["kind"] == "update" for e in events):
+        context = attempt.get('context', {})
+        tests = context.get('tests') if isinstance(context.get('tests'), dict) else {}
+        if (phase == 'verify' and context.get('code_candidate_hash')
+                and tests.get('candidate_hash') != context['code_candidate_hash']):
+            state, event = ('running' if active else 'pending'), None
+        if phase in {"update", "correcting"} and not any(e["kind"] == phase for e in events):
             state = "not_applicable" if not active else "running"
         errors = [
             e

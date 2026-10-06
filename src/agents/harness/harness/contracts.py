@@ -56,7 +56,7 @@ class StoryRequest(BaseModel):
 
 RunStage = Literal[
     "exploring", "awaiting_clarification", "proposing", "awaiting_plan_review",
-    "updating", "applying", "verifying", "preparing_final_diff",
+    "updating", "applying", "correcting", "verifying", "preparing_final_diff",
     "awaiting_diff_review", "publishing", "complete", "failed", "cancelled",
 ]
 RunState = Literal[
@@ -202,6 +202,7 @@ class RatioSpec(BaseModel):
 class OpenSpecArtifactRef(BaseModel):
     artifact_id: str
     sha256: str
+    revision: int | None = Field(default=None, ge=0)
 
 
 class OpenSpecAttempt(BaseModel):
@@ -212,6 +213,7 @@ class OpenSpecAttempt(BaseModel):
     prepared_hashes: dict[str, str] = Field(default_factory=dict)
     published_hashes: dict[str, str] = Field(default_factory=dict)
     artifacts: dict[str, OpenSpecArtifactRef] = Field(default_factory=dict)
+    artifact_history: dict[str, list[OpenSpecArtifactRef]] = Field(default_factory=dict)
     published_files: list[str] = Field(default_factory=list)
 
 
@@ -273,6 +275,8 @@ class AgentCallContract(BaseModel):
     role: str
     stage: RunStage | None = None
     revision: int | None = Field(default=None, ge=0)
+    candidate_revision: int | None = Field(default=None, ge=0)
+    candidate_hash: str | None = Field(default=None, pattern=r'^[a-f0-9]{64}$')
     approved_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     instruction_provenance: dict | None = None
     profile_provenance: dict | None = None

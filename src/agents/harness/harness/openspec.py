@@ -18,6 +18,8 @@ import yaml
 
 from .contracts import ClientProfile, RatioSpec, Story, StoryRequest, parse_agent_output
 from .skills import SkillCatalog, checked_file
+from .capability_contract import CapabilityArtifactDefect, capability_output_contract, validate_capabilities, validate_delta
+from .repository_policy import safe_target
 
 
 class OpenSpecCLI:
@@ -219,6 +221,23 @@ def exploration_context(cli, root, profile):
             'project_config': config, 'existing_specs': specs}
 
 
+def capability_inventory(root, profile):
+    """Read authorized base specs, including existing nested capability identifiers."""
+    specs_root = safe_target(root, 'openspec/specs')
+    limit = profile.openspec_skills.max_prompt_bytes if profile else 524288
+    inventory = {}
+    for path in sorted(specs_root.rglob('spec.md')):
+        relative = path.relative_to(root).as_posix()
+        safe_target(root, relative)
+        if profile and not profile.allows_read(relative):
+            raise ValueError('Spec sin acceso por perfil')
+        identifier = path.parent.relative_to(specs_root).as_posix()
+        inventory[identifier] = checked_file(root, relative, limit).decode('utf-8')
+    if sum(len(v.encode('utf-8')) for v in inventory.values()) > limit:
+        raise ValueError('Inventario de capacidades excede presupuesto')
+    return inventory
+
+
 @dataclass(frozen=True)
 class PlanResult:
     change_id: str
@@ -256,6 +275,7 @@ def propose_client_change(
     on_artifact: Callable[[str, str, str], None] | None = None,
     profile: ClientProfile | None = None,
     skill_catalog=None, base_sha=None, on_snapshot=None, context_manager=None,
+    candidate_revision=None, candidate_hash=None,
 ) -> PlanResult:
     """Generate or revise the four schema artifacts with fixed paths and strict validation."""
     if re.fullmatch(r"[a-z0-9][a-z0-9-]{2,90}", change_id) is None:
@@ -263,12 +283,9 @@ def propose_client_change(
     change_root = root / "openspec" / "changes" / change_id
     if not change_root.exists():
         cli.new_change(root, change_id)
-    output_names = {
-        "proposal": "proposal.md",
-        "specs": f"specs/{change_id}/spec.md",
-        "design": "design.md",
-        "tasks": "tasks.md",
-    }
+    inventory = capability_inventory(root, profile)
+    capabilities = []
+    output_names = [('proposal', 'proposal.md', None)]
     artifacts: dict[str, str] = {}
     hashes: dict[str, str] = {}
     metadata = {}
@@ -276,11 +293,11 @@ def propose_client_change(
     from .prompt_contracts import planner_artifact_output, validate_artifact_content, validate_planner_manifest
     repo_context = RepoContext(root, profile, cache=context_manager.cache if context_manager else None,
                                identity=context_manager.identity if context_manager else None) if profile else None
-    for artifact, suffix in output_names.items():
+    for artifact, suffix, capability in output_names:
         instructions = instruction_context(cli, root, change_id, artifact, profile)
         if instructions.get("schemaName") != "spec-driven" or Path(instructions.get("changeDir", "")).resolve() != change_root.resolve():
             raise ValueError("OpenSpec resolvió un esquema o raíz fuera del cliente")
-        target = change_root / Path(suffix)
+        target = safe_target(root, f'openspec/changes/{change_id}/{suffix}')
         if artifact != "specs" and Path(instructions.get("resolvedOutputPath", "")).resolve() != target.resolve():
             raise ValueError("OpenSpec resolvió un artefacto fuera del cambio cliente")
         prompt = {
@@ -300,6 +317,13 @@ def propose_client_change(
             "policy": profile.model_dump() if profile else None,
             "approved_manifest_contract": 'Solo proposal general_patch requiere summary y manifest: operaciones de código/pruebas dentro del perfil, nunca rutas OpenSpec. El Harness gestiona los artefactos OpenSpec por separado. No son el diff real. La aprobación autoriza el PR después de verificar, sincronizar y archivar.',
         }
+        if artifact == 'proposal':
+            prompt['capability_inventory'] = inventory
+            prompt['response_format']['capabilities'] = capability_output_contract()
+        if capability:
+            prompt['capability'] = capability.model_dump()
+            prompt['base_spec'] = inventory.get(capability.path)
+            prompt['declared_capabilities'] = [c.model_dump() for c in capabilities]
         catalog = skill_catalog or (SkillCatalog(root, profile, cli.version()) if profile else None)
         extras = {}
         if catalog:
@@ -309,11 +333,18 @@ def propose_client_change(
             prompt['openspec_instructions'] = instructions
         parsed = contextual_answer(models, 'planner', prompt, repo_context,
             stage='updating' if feedback else 'proposing', revision=revision,
+            candidate_revision=candidate_revision, candidate_hash=candidate_hash,
             context_manager=context_manager, phase='update' if feedback else 'propose', profile=profile, **extras)
         if not isinstance(parsed, dict) or not isinstance(parsed.get("content"), str) or not 20 <= len(parsed["content"]) <= 50000:
             raise ValueError("El planner devolvió un artefacto OpenSpec inválido")
         content = parsed["content"].strip() + "\n"
         validate_artifact_content(parsed['content'], prompt)
+        if artifact == 'proposal':
+            capabilities = validate_capabilities(parsed.get('capabilities'), inventory)
+            output_names.extend(('specs', f'specs/{c.path}/spec.md', c) for c in capabilities)
+            output_names.extend([('design', 'design.md', None), ('tasks', 'tasks.md', None)])
+        elif artifact == 'specs':
+            validate_delta(content, capability, inventory.get(capability.path))
         if artifact == 'proposal' and profile:
             if profile.general_patch:
                 manifest, summary = parsed.get('manifest'), parsed.get('summary')
@@ -326,6 +357,8 @@ def propose_client_change(
             else:
                 metadata = {'summary': content, 'manifest': [{'op': 'modify', 'path': profile.strategy.notebook}],
                             'validation_plan': {'checks': [{'adapter': 'silver_safe_ratio', 'reason': 'tres filas sintéticas'}]}}
+        if artifact == 'proposal':
+            metadata['capabilities'] = [c.model_dump() for c in capabilities]
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         path = target.relative_to(root).as_posix()
@@ -333,6 +366,18 @@ def propose_client_change(
         hashes[path] = hashlib.sha256(content.encode("utf-8")).hexdigest()
         if on_artifact:
             on_artifact(path, content, hashes[path])
+    # Previous callbacks/checkpoints retain historical bytes; only the current
+    # candidate loses obsolete destinations, after all replacements are valid.
+    desired = {f'specs/{c.path}/spec.md' for c in capabilities}
+    for stale in (change_root / 'specs').rglob('*.md'):
+        if stale.relative_to(change_root).as_posix() not in desired:
+            safe_target(root, stale.relative_to(root).as_posix()).unlink()
+    actual = {p.relative_to(change_root).as_posix() for p in (change_root / 'specs').rglob('*.md')}
+    if actual != desired:
+        raise CapabilityArtifactDefect('Los destinos delta del runtime contradicen capacidades declaradas')
+    for path, expected_content in artifacts.items():
+        if safe_target(root, path).read_text(encoding='utf-8') != expected_content:
+            raise CapabilityArtifactDefect('Los bytes del artefacto runtime contradicen el plan validado')
     cli.validate(root, change_id)
     return PlanResult(change_id, artifacts, hashes, metadata)
 

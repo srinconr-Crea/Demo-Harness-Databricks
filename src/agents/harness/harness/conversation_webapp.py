@@ -125,7 +125,7 @@ def create_conversation_app(engine, profile) -> FastAPI:
 
     @app.get("/runs/{run_id}")
     def status(run_id: str, request: Request):
-        return authorized_run(run_id, request)[0]
+        return sanitize_log_value(authorized_run(run_id, request)[0], 200000)
 
     @app.get("/runs/{run_id}/events")
     def events(run_id: str, request: Request, after: int = 0, limit: int = 50):
@@ -145,6 +145,7 @@ def create_conversation_app(engine, profile) -> FastAPI:
         return {"calls": sorted(({
             "call_id": item.get("call_id"), "role": item.get("role"),
             "stage": item.get("stage"), "revision": item.get("revision"),
+            "candidate_revision": item.get("candidate_revision"), "candidate_hash": item.get("candidate_hash"),
             "model": item.get("model"), "status": item.get("status"),
             "input_tokens": item.get("input_tokens"), "output_tokens": item.get("output_tokens"),
             "estimated_cost_usd": item.get("estimated_cost_usd"),
@@ -161,7 +162,15 @@ def create_conversation_app(engine, profile) -> FastAPI:
         refs = attempt.get("openspec", {}).get("artifacts", {})
         path = next((name for name, ref in refs.items() if ref["artifact_id"] == artifact_id), None)
         if path is None:
-            raise HTTPException(status_code=404)
+            history = attempt.get('openspec', {}).get('artifact_history', {})
+            path = next((name for name, versions in history.items()
+                         if any(ref['artifact_id'] == artifact_id for ref in versions)), None)
+            if path is None:
+                raise HTTPException(status_code=404)
+            historical = engine.store.load_openspec_artifact(run_id, attempt['attempt_id'], artifact_id)
+            if not historical:
+                raise HTTPException(status_code=404)
+            return {**historical, 'redacted': True}
         checkpoint_id = attempt.get("checkpoint_id")
         if checkpoint_id:
             checkpoint = engine.store.load_checkpoint(run_id, attempt["attempt_id"], checkpoint_id)

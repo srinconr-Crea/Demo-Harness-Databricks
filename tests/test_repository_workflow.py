@@ -303,7 +303,7 @@ def test_new_story_publishes_automatically_with_advisory_failures(tmp_path, advi
     assert [a["kind"] for a in final["approvals"]] == ["plan"]
     assert not final["context"].get("correction_count")
     assert all(
-        row["status"] == "ok" for row in run["checklist"] if row["phase"] != "update"
+        row["status"] == "ok" for row in run["checklist"] if row["phase"] not in {"update", "correcting"}
     )
     if advice == "reject":
         from harness.checkout import restore_checkpoint
@@ -364,7 +364,7 @@ def test_candidate_tamper_and_missing_tests_block_publication(tmp_path):
         key="plan",
     )
     assert (
-        engine.get(run_id)["state"] == "awaiting_plan_review" and not github.published
+        engine.get(run_id)["state"] == "failed" and not github.published
     )
     assert (
         RunAttempt(attempt_id="legacy", state="queued").publication_mode
@@ -438,12 +438,14 @@ def test_automatic_publication_rechecks_base_after_archive(tmp_path):
     assert final["base_sha"] == github.sha and "candidate_hash" not in final["context"]
 
 
-def test_sonnet_rejection_needs_new_plan(tmp_path):
+def test_sonnet_scope_rejection_needs_new_plan(tmp_path):
     class Model(FakeModels):
         def complete(self, role, prompt, **kwargs):
             response = super().complete(role, prompt, **kwargs)
             if role == "openspec_verifier":
-                response.text = '{"approved": false, "findings": ["Wrong output"]}'
+                response.text = json.dumps({'approved': False, 'findings': [{'category': 'scope_spec',
+                    'code': 'output_contract', 'criterion': 'Salida autorizada', 'evidence': 'Contrato requiere nueva salida',
+                    'paths': ['src/value.py'], 'operations': ['modify'], 'recommendation': 'Revisar contrato'}]})
             return response
 
     engine, github, store, run_id = prepare_new_run(tmp_path, Model())
@@ -459,7 +461,7 @@ def test_sonnet_rejection_needs_new_plan(tmp_path):
     assert (
         engine.get(run_id)["state"] == "awaiting_plan_review" and not github.published
     )
-    assert engine.get(run_id)["attempts"][-1]["context"]["correction_count"] == 1
+    assert engine.get(run_id)["attempts"][-1]["context"]["implementation_correction_count"] == 0
 
 
 def test_manifest_expansion_needs_new_plan(tmp_path):
@@ -496,6 +498,6 @@ def test_manifest_expansion_needs_new_plan(tmp_path):
         engine.get(run_id)["state"] == "awaiting_plan_review" and not github.published
     )
     assert any(
-        event["kind"] == "scope_changed"
+        event["kind"] == "failure_classified" and event['details']['route'] == 'updating'
         for event in engine.get(run_id)["attempts"][-1]["timeline"]
     )

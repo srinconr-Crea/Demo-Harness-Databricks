@@ -44,6 +44,10 @@ checkpoints ni inventar procedencia del histórico. Véase la guía de instalaci
 
 ## Incorporación única de un cliente
 
+Los contratos de capacidades y destinos se detallan en la
+[guía del planner](agents/planner.md); la cobertura y las operaciones acumuladas
+se describen en el [contrato del editor](editor-manifest.md).
+
 El perfil YAML fija repositorio, rama base, rutas editables, instalación de GitHub App y estrategia. La preparación es exclusivamente humana, fuera de la App. En el checkout cliente, una persona usa la CLI compatible (actualmente 1.13.2), selecciona los workflows y genera las skills:
 
 ```powershell
@@ -82,6 +86,82 @@ Las pruebas funcionales se seleccionan desde `tests/` del cliente y corren en el
 Antes de la primera HU, integrar en `develop` la preparación manual OpenSpec 1.13.2 con las siete skills, contexto del proyecto y reglas; comprobar el acceso de la GitHub App y mantener pruebas sintéticas del comportamiento afectado. Una primera prueba de documentación o código puro con regresiones existentes evita depender de recursos externos. Selecciona pruebas existentes en el checkout cliente: este harness no aporta automáticamente una suite al cliente. En el producto, [test_project_context.py](../tests/test_project_context.py) comprueba referencias y el contexto general; nuevas reglas funcionales requieren pruebas específicas en el manifiesto aprobado.
 
 Los cambios en `databricks.yml` o `resources/` activan obligatoriamente `bundle validate --strict -t dev`, si ese target está configurado en el perfil aprobado. Esta comprobación requiere CLI Databricks y autenticación aislada provisionadas en el Job; el runtime actual del Job solo declara pytest y no prepara dichas herramientas. Hasta provisionarlas, las HUs de bundle quedan bloqueadas en verificación y no publican PR. Nunca usar credenciales de la App como alternativa ni ejecutar bundle deploy/run del cliente. La revisión del PR y la parada de la App siguen siendo decisiones humanas.
+
+## Verificación y corrección de implementación
+
+Las pruebas obligatorias y Sonnet conservan los hallazgos antes de decidir la
+continuación. La categoría propuesta por el modelo no otorga permisos: el
+harness contrasta evidencia, plan, perfil y manifiesto vigentes.
+
+| Categoría | Continuación |
+| --- | --- |
+| `implementation` | `correcting` usa el desarrollador con la fase `apply`, conserva aprobación y revisión del plan, y vuelve a validación técnica y Sonnet. Solo permite reparaciones dentro del contrato autorizado. |
+| `scope_spec` | `update` prepara otra revisión del plan y espera aprobación humana antes de editar el alcance adicional. Los hallazgos mixtos que requieren cambiar el contrato impiden la corrección dependiente. |
+| `infrastructure_evidence` | Recuperación o lecturas acotadas ya autorizadas; si la evidencia sigue siendo insuficiente, `failed` con diagnóstico. Un sandbox inaccesible o `passed=false` sin causa no autoriza modificar código. |
+| `harness_defect` | `failed` y diagnóstico del producto, sin enviar al planner o desarrollador cliente a repararlo. |
+
+Los rechazos ambiguos, contratos inválidos y denegaciones de política conservan
+sus controles. Los hallazgos informativos no generan reparaciones por sí solos.
+Haiku 4.5 conserva su invocación asesora: recomendaciones, rechazo e
+indisponibilidad no bloquean ni consumen correcciones de implementación.
+
+La revisión/hash del plan identifica la autorización; la versión/hash del
+candidato identifica los bytes que se prueban. Una corrección material invalida
+la elegibilidad de pruebas y Sonnet del candidato anterior. Sus resultados
+permanecen históricos y la App muestra `correcting`, causa y verificación
+pendiente para los bytes nuevos. Las notas del desarrollador no sustituyen
+pruebas ejecutadas. El estado de tareas se registra aparte durante la
+corrección, sin modificar los bytes aprobados de `tasks.md`; sync, archive y PR
+siguen pendientes hasta sus transiciones deterministas.
+
+El máximo compartido entre fallos técnicos y semánticos es de dos correcciones
+lógicas por intento. Checkpoint y coordinación reservan cada continuación antes
+de invocar el modelo; reiniciar, actualizar el plan o cambiar de etapa no reinicia
+el contador. Antes de otra llamada equivalente se comprueba progreso pertinente
+del candidato, contrato o evidencia: prosa distinta, timestamps, IDs y una nueva
+aprobación del mismo alcance no resuelven un bloqueo. La recurrencia sin avance
+detiene el intento con evidencia. La recuperación de formato conserva su límite
+propio y no constituye una corrección de implementación. Cada llamada real
+conserva su uso y costo estimado cuando existe `usage`.
+
+El desarrollador puede proponer operaciones parciales, pero debe cubrir cada
+entrada del manifiesto con una operación, `already_conformant` con hash actual
+comprobable o un bloqueo con evidencia. `operations=[]` no acredita éxito por
+sí solo. El manifiesto limita el efecto acumulado base/candidato: un `create`
+aprobado permite corregir mediante `modify` el archivo ya creado en ese intento;
+un `modify` aprobado no permite eliminar el archivo. El editor comprueba hashes,
+rutas, tipos, atomicidad y límites acumulados antes de escribir. Las pruebas se
+seleccionan sobre todos los cambios respecto de la base, aunque la última
+corrección toque solo parte de ellos.
+
+La propuesta declara capacidades OpenSpec nuevas o modificadas y sus destinos
+exactos, contrastados con el inventario autorizado. Los deltas se generan por
+capacidad, no por nombre de la HU, y los requisitos `MODIFIED` se comprueban
+contra la base además de la validación estricta. `update` retira los destinos
+obsoletos del candidato conservando evidencia histórica. El desarrollador no
+recibe permiso de escritura OpenSpec; cada cliente conserva su propio árbol,
+separado del harness.
+
+## Compatibilidad, drenaje y rollback del workflow
+
+El contrato de workflow se fija por intento junto con su procedencia. Los
+históricos conservan registros, mensajes y modalidad original sin inventar
+categorías, candidatos o verificaciones ausentes. Un intento activo anterior
+continúa solo bajo un contrato compatible; si no puede recuperarse, se detiene
+con diagnóstico y requiere un nuevo intento explícito. No migrar silenciosamente
+aprobaciones históricas al workflow de corrección.
+
+Antes de actualizar una instalación, drenar intentos activos o identificar
+explícitamente los que conservan el workflow anterior. Conservar el paquete
+previo y todos los checkpoints/evidencias para rollback. Un runtime anterior que
+no entiende `correcting` no debe reanudar automáticamente esos intentos:
+restaurar un runtime compatible o crear un nuevo intento con planificación y
+aprobación propias. La recuperación de `correcting` exige compatibilidad de
+plan, perfil, catálogo, candidato y evidencia, más checkpoint y lease/CAS; el
+retry humano conserva comprobaciones de `failure_id`, revisión e identidad y
+no se habilita automáticamente para todos los fallos nuevos. Publicar o
+desplegar una versión requiere el procedimiento operativo autorizado; la
+verificación local de este cambio no equivale a despliegue ni smoke remoto.
 
 ## Fallos del planner y reintento
 

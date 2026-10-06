@@ -65,6 +65,8 @@ class ModelResponse:
     error: str | None = None
     stage: str | None = None
     revision: int | None = None
+    candidate_revision: int | None = None
+    candidate_hash: str | None = None
     approved_sha256: str | None = None
     instruction_provenance: dict | None = None
     context_provenance: dict | None = None
@@ -139,7 +141,7 @@ class ModelClient:
             self.on_call(role, updated)
         return updated
 
-    def complete(self, role: str, prompt: str, *, call_id: str | None = None, usage_context: dict[str, str] | None = None, max_tokens: int | None = None, system_prompt: str | None = None, stage: str | None = None, revision: int | None = None, approved_sha256: str | None = None, instruction_provenance: dict | None = None, context_provenance: dict | None = None, response_format: dict | None = None, parent_call_id: str | None = None, recovery_index: int | None = None) -> ModelResponse:
+    def complete(self, role: str, prompt: str, *, call_id: str | None = None, usage_context: dict[str, str] | None = None, max_tokens: int | None = None, system_prompt: str | None = None, stage: str | None = None, revision: int | None = None, candidate_revision: int | None = None, candidate_hash: str | None = None, approved_sha256: str | None = None, instruction_provenance: dict | None = None, context_provenance: dict | None = None, response_format: dict | None = None, parent_call_id: str | None = None, recovery_index: int | None = None) -> ModelResponse:
         model = self.routing[role]
         call_id = call_id or uuid.uuid4().hex
         body = {
@@ -168,6 +170,8 @@ class ModelClient:
             "started_at": started_at,
             "stage": stage,
             "revision": revision,
+            "candidate_revision": candidate_revision,
+            "candidate_hash": candidate_hash,
             "approved_sha256": approved_sha256,
             "instruction_provenance": instruction_provenance,
             "context_provenance": context_provenance,

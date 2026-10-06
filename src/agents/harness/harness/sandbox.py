@@ -52,11 +52,21 @@ def verify_general_patch(root: Path, profile, paths: list[str], job_runner,
     if policy is None or not paths:
         raise ValueError("No hay una política de pruebas generales verificable")
     from .validation import validate_file, validation_plan
+    from sqlglot.errors import ParseError
+    from yaml import YAMLError
+    from jsonschema.exceptions import ValidationError
     plan = validation_plan(profile, paths)
     evidence = []
     for check in plan['checks']:
         if check['adapter'] not in {'pytest_sandbox', 'databricks_bundle_validate'}:
-            evidence.append(validate_file(root, check['path'], check['adapter'], policy.schemas))
+            try:
+                evidence.append(validate_file(root, check['path'], check['adapter'], policy.schemas))
+            except (SyntaxError, ValueError, ParseError, YAMLError, ValidationError) as error:
+                return {'passed': False, 'revision': revision, 'validation_plan': plan,
+                        'evidence': [type(error).__name__ + ': ' + str(error)[:1000]],
+                        'findings': [{'category': 'implementation', 'code': 'static_validation_failed',
+                            'criterion': check['adapter'], 'evidence': type(error).__name__ + ': ' + str(error)[:1000],
+                            'paths': [check['path']], 'operations': [], 'recommendation': 'Corregir el archivo autorizado'}]}
     binding = {'revision': revision, 'validation_plan': plan}
     if plan['requires_job']:
         if job_runner is None:
@@ -66,8 +76,21 @@ def verify_general_patch(root: Path, profile, paths: list[str], job_runner,
         from .sandbox_job import SandboxJobRunner
         if isinstance(job_runner, SandboxJobRunner):
             kwargs.update(profile=profile, bundle_target=plan['bundle_target'])
-        result = job_runner.run(root, **kwargs)
+        try:
+            result = job_runner.run(root, **kwargs)
+        except (TimeoutError, RuntimeError, ValueError) as error:
+            return {**binding, 'passed': False, 'evidence': [str(error)[:1000]],
+                    'findings': [{'category': 'infrastructure_evidence', 'code': 'sandbox_unavailable',
+                        'criterion': 'Job sandbox', 'evidence': type(error).__name__ + ': ' + str(error)[:1000],
+                        'paths': [], 'operations': [], 'recommendation': 'Recuperar comprobación sin modificar código cliente'}]}
+        findings = []
+        if result.get('passed') is not True and result.get('failure_category') in {'implementation', 'infrastructure_evidence'}:
+            findings = [{'category': result['failure_category'], 'code': result.get('failure_code', 'sandbox_failed'),
+                'criterion': 'Pruebas configuradas', 'evidence': '\n'.join(result.get('evidence') or [])[:10000] or 'Resultado fallido del Job',
+                'paths': paths if result['failure_category'] == 'implementation' else [],
+                'operations': [], 'recommendation': 'Resolver el fallo según evidencia del runner'}]
         return {**binding, 'passed': result.get('passed') is True,
                 'evidence': evidence + list(result.get('evidence') or []),
+                'findings': findings,
                 'job_run_id': result.get('job_run_id'), 'archive_sha256': result.get('archive_sha256')}
     return {**binding, 'passed': True, 'evidence': evidence}

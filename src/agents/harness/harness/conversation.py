@@ -32,6 +32,7 @@ from .openspec import (
     propose_client_change,
 )
 from .patch import FileOperation, apply_file_operations
+from .failure_routing import WORKFLOW_VERSION, WorkflowFailure, failure_route, progress_key, finding_contract
 from .prompt_contracts import PromptContracts, ArtifactPresentationError
 from .repo_context import ContextResponseError, RepoContext, contextual_answer
 from .repository_policy import safe_target
@@ -135,9 +136,9 @@ class ConversationEngine:
         return pinned is None or pinned == self._context_settings()
 
     def _new_context(self):
-        state = {'instruction_engine': 'client-skills-v1'}
-        if self.context_policy.enabled:
-            state['context_management'] = self._context_settings()
+        state = {'instruction_engine': 'client-skills-v1', 'workflow_version': WORKFLOW_VERSION,
+                 'candidate_revision': 0, 'implementation_correction_count': 0}
+        state['context_management'] = self._context_settings()
         return state
 
     def _save(self, record: dict) -> None:
@@ -392,7 +393,7 @@ class ConversationEngine:
                     record["state"] = attempt["state"]
                     record["updated_at"] = _now()
                     self._save(record)
-                    if step_error is not None and not isinstance(step_error, (ContextResponseError, ArtifactPresentationError)):
+                    if step_error is not None and not isinstance(step_error, (ContextResponseError, ArtifactPresentationError, WorkflowFailure)):
                         raise step_error
             except Exception as error:
                 # Release a claimed lease on a failed operation. The prior checkpoint
@@ -484,6 +485,9 @@ class ConversationEngine:
         stage = attempt["stage"]
         story = StoryRequest.model_validate(record["story"])
         context = attempt.setdefault("context", {})
+        classified = context.get('workflow_version') == WORKFLOW_VERSION
+        if context.get('workflow_version') not in {None, WORKFLOW_VERSION}:
+            raise WorkflowFailure('Contrato del intento incompatible con este runtime; requiere nuevo intento explícito', 'incompatible_workflow')
         revision = attempt["revision"]
         if action and action['kind'] == 'cancel':
             self._event(attempt, 'cancel', actor=action['actor'])
@@ -519,17 +523,95 @@ class ConversationEngine:
                 on_snapshot=lambda value: self.store.save_context_snapshot(record['run_id'], attempt['attempt_id'], value),
                 on_event=context_event)
 
+        def record_source(result):
+            if result.get('path') and result.get('sha256') and not result.get('truncated'):
+                sources = context.setdefault('observed_sources', [])
+                sources[:] = [item for item in sources if item['path'] != result['path']]
+                sources.append(result)
+                del sources[:-100]
+
+        context_reader = None
+
         def repository_context():
-            return RepoContext(root, self.profile, cache=manager.cache if manager else None,
-                               identity=manager.identity if manager else None)
+            nonlocal context_reader
+            if context_reader is None:
+                context_reader = RepoContext(root, self.profile, cache=manager.cache if manager else None,
+                    identity=manager.identity if manager else None, on_result=record_source)
+            return context_reader
+
+        def code_snapshot():
+            return {path: content for path, content in snapshot_changes(root, attempt['base_sha'], self._allows).items()
+                    if self.profile.allows_code(path)}
+
+        def code_hash():
+            return _hash_files(attempt['base_sha'], code_snapshot())
+
+        def shared_evidence():
+            # Source bytes are retrieved under the same profile on every phase.
+            reader = repository_context()
+            manifest = context.get('plan_metadata', {}).get('manifest', [])
+            reads = []
+            references = []
+            for item in manifest:
+                target = safe_target(root, item['path'])
+                if target.is_file():
+                    references.append({'path': item['path'], 'sha256': hashlib.sha256(target.read_bytes()).hexdigest()})
+                    # Reserve part of the shared budget for the reviewer's own retrieval.
+                    if reader.reads < min(reader.policy.max_reads, reader.policy.max_rounds) // 2:
+                        result = repository_context().request({'op': 'read_file', 'path': item['path']})
+                        reads.append({**result, 'path': item['path']})
+            observed = []
+            for item in context.get('observed_sources', []):
+                if self.profile.allows_read(item['path']):
+                    target = safe_target(root, item['path'])
+                    if target.is_file() and hashlib.sha256(target.read_bytes()).hexdigest() == item['sha256']:
+                        observed.append({'path': item['path'], 'sha256': item['sha256'],
+                                         'origin': 'repository_read', 'recoverable': True})
+            return {'candidate_revision': context.get('candidate_revision'), 'candidate_hash': code_hash(),
+                    'approved_manifest': manifest, 'developer_notes': context.get('developer_notes', []),
+                    'test_evidence': context.get('tests'), 'pending_findings': context.get('pending_findings', []),
+                    'current_sources': reads, 'source_references': references, 'observed_sources': observed,
+                    'task_evidence': context.get('task_evidence', {})}
+
+        def route_findings(findings):
+            manifest = context['plan_metadata']['manifest']
+            next_stage = failure_route(findings, manifest)
+            context['pending_findings'] = findings
+            relevant_paths = sorted({p for f in findings for p in f.get('paths', []) if self.profile.allows_code(p)})
+            relevant_hash = digest({p: hashlib.sha256(safe_target(root, p).read_bytes()).hexdigest()
+                if safe_target(root, p).is_file() else None for p in relevant_paths})
+            key = progress_key(findings, relevant_hash, manifest)
+            seen = context.setdefault('blocker_history', [])
+            if key in seen:
+                self._event(attempt, 'no_progress', blocker_sha256=key, findings=findings)
+                raise WorkflowFailure('El mismo bloqueo se repitió sin progreso pertinente; requiere diagnóstico humano', 'no_progress')
+            seen.append(key)
+            self._event(attempt, 'failure_classified', route=next_stage, findings=findings,
+                        candidate_revision=context.get('candidate_revision'), candidate_hash=code_hash(), blocker_sha256=key)
+            if next_stage == 'failed':
+                categories = {item['category'] for item in findings}
+                category = 'harness_defect' if 'harness_defect' in categories else 'infrastructure_evidence'
+                raise WorkflowFailure('No verificado: ' + category + '. Consultar evidencia del fallo.', category)
+            if next_stage == 'correcting':
+                count = context.get('implementation_correction_count', 0)
+                if count >= 2:
+                    raise WorkflowFailure('Las correcciones automáticas agotaron el máximo de dos por intento', 'correction_limit')
+                context['implementation_correction_count'] = count + 1
+                context['correction_id'] = uuid.uuid4().hex
+            else:
+                context['feedback'] = json.dumps({'findings': findings, 'evidence': shared_evidence()}, ensure_ascii=False)
+            return next_stage
 
         def answer(role, phase, prompt, *, instructions=None, repo_context=None, approved_hash=None):
             payload, extras = catalog.compose(phase, prompt, instructions=instructions,
                 base_sha=attempt['base_sha'], on_snapshot=snapshot)
             provenance = extras['instruction_provenance']
+            if classified:
+                extras.update(candidate_revision=context.get('candidate_revision'), candidate_hash=code_hash())
             self._event(attempt, 'instructions', **provenance)
             return contextual_answer(models, role, payload, repo_context, stage=stage,
-                revision=revision, approved_sha256=approved_hash, context_manager=manager, phase=phase, **extras)
+                revision=revision, approved_sha256=approved_hash, context_manager=manager, phase=phase,
+                profile=self.profile if classified else None, **extras)
         if stage == "exploring":
             result = answer("explorer", 'explore', {
                 "task": "Explorar la HU, resumirla y preguntar solo lo necesario. JSON: summary, questions[]",
@@ -572,6 +654,8 @@ class ConversationEngine:
                 profile=self.profile,
                 skill_catalog=catalog, base_sha=attempt['base_sha'], on_snapshot=snapshot,
                 context_manager=manager,
+                candidate_revision=context.get('candidate_revision') if classified else None,
+                candidate_hash=code_hash() if classified else None,
                 on_artifact=lambda path, content, digest: self._save_artifact(record, attempt, path, content, digest),
             )
             attempt["revision"] += 1
@@ -596,7 +680,7 @@ class ConversationEngine:
                                                          "sha256": context["plan_hash"], "actor": action["actor"], "at": _now()})
             self._event(attempt, "plan_approved", actor=action["actor"], hash=context["plan_hash"])
             return "applying"
-        if stage == "applying":
+        if stage in {"applying", "correcting"}:
             approved = next((item for item in reversed(attempt["approvals"]) if item["kind"] == "plan" and item["revision"] == revision), None)
             if not approved or approved["sha256"] != context["plan_hash"]:
                 raise ValueError("Apply requiere un plan aprobado vigente")
@@ -612,15 +696,59 @@ class ConversationEngine:
                     "story": story.model_dump(), "artifacts": artifacts,
                     "source_summary": (json.dumps([repository_context().request({'op': 'read_file', 'path': item['path']})
                         for item in context['plan_metadata']['manifest'] if item['op'] != 'create'], ensure_ascii=False)
-                        if manager else _source_summary(root, self.profile)),
+                        if manager and not classified else _source_summary(root, self.profile)),
                     "allowed_paths": self.profile.general_patch.allowed_paths,
                     "policy": self.profile.model_dump(),
                     'approved_manifest': context['plan_metadata']['manifest'],
+                    **({'workflow_version': WORKFLOW_VERSION, 'stage_task': stage,
+                        'evidence_bundle': shared_evidence(),
+                        'coverage_contract': [{'path': 'ruta del manifiesto', 'status': 'applied|already_conformant|blocked',
+                                               'sha256': 'hash actual obligatorio si ya conforme', 'reason': 'explicación de conformidad/bloqueo'}],
+                        'task': 'Corregir o aplicar tareas aprobadas. No reescribir archivos ya conformes. JSON operations[], coverage[] de todas las entradas, notes. Nunca ampliar permisos.'}
+                       if classified else {}),
                 }, instructions=apply_context, approved_hash=approved["sha256"], repo_context=repository_context())
                 raw = proposal.get("operations")
                 if not isinstance(raw, list):
                     raise ValueError("El desarrollador no devolvió operaciones tipadas")
                 operations = [FileOperation.model_validate(item) for item in raw]
+                if classified:
+                    from .patch import validate_manifest_coverage
+                    context.setdefault('developer_notes', []).append({'revision': revision,
+                        'candidate_revision': context.get('candidate_revision'), 'notes': proposal.get('notes', '')})
+                    allowed_paths = {item['path'] for item in context['plan_metadata']['manifest']}
+                    outside = [item for item in operations if item.path not in allowed_paths]
+                    allowed_ops = {item['path']: item['op'] for item in context['plan_metadata']['manifest']}
+                    outside += [item for item in operations if item.path in allowed_ops
+                        and item.op != allowed_ops[item.path]
+                        and not (item.op == 'modify' and allowed_ops[item.path] == 'create')]
+                    if outside:
+                        findings = [{'category': 'scope_spec', 'code': 'additional_path', 'criterion': 'Manifiesto aprobado',
+                            'evidence': 'Operación solicitada fuera del manifiesto', 'paths': [item.path],
+                            'operations': [item.op], 'recommendation': 'Revisar alcance antes de editar'} for item in outside]
+                        return route_findings(findings)
+                    blocked = [item for item in proposal.get('coverage', []) if item.get('status') == 'blocked']
+                    if blocked:
+                        raise WorkflowFailure('Cobertura bloqueada: obtener evidencia o revisar diagnóstico; no se amplía alcance automáticamente')
+                    paths = validate_manifest_coverage(root, self.profile, attempt['base_sha'],
+                        context['plan_metadata']['manifest'], operations, proposal.get('coverage'))
+                    before = code_hash()
+                    if operations:
+                        apply_file_operations(root, self.profile, operations)
+                    after = code_hash()
+                    if after != before:
+                        context['candidate_revision'] = context.get('candidate_revision', 0) + 1
+                        context.pop('tests', None)
+                        context.pop('verified_code_hash', None)
+                        context.pop('semantic_verification', None)
+                    context['code_candidate_hash'] = after
+                    context['changed_code_paths'] = sorted(code_snapshot())
+                    context['task_evidence'] = {'implementation': proposal['coverage'], 'verification': 'pending',
+                                               'sync': 'pending', 'archive': 'pending', 'publication': 'pending',
+                                               'candidate_hash': after, 'plan_hash': context['plan_hash']}
+                    self._event(attempt, 'correcting' if stage == 'correcting' else 'apply', paths=context['changed_code_paths'],
+                                candidate_revision=context.get('candidate_revision'), candidate_hash=after,
+                                correction_id=context.get('correction_id'))
+                    return 'verifying'
                 allowed = {(item['op'], item['path']) for item in context['plan_metadata']['manifest']}
                 if {(item.op, item.path) for item in operations} != allowed:
                     context['feedback'] = 'El desarrollador requiere archivos u operaciones fuera del manifiesto aprobado; revisar alcance.'
@@ -629,17 +757,37 @@ class ConversationEngine:
                 paths = apply_file_operations(root, self.profile, operations)
             else:
                 paths = self._apply_ratio(root, story, models, attempt, approved, answer, apply_context)
+            if classified:
+                context['candidate_revision'] = context.get('candidate_revision', 0) + 1
+                context['code_candidate_hash'] = code_hash()
+                context['task_evidence'] = {'implementation': paths, 'verification': 'pending',
+                    'sync': 'pending', 'archive': 'pending', 'publication': 'pending',
+                    'candidate_hash': code_hash(), 'plan_hash': context['plan_hash']}
             context["changed_code_paths"] = paths
             self._event(attempt, "apply", paths=paths)
             return "verifying"
         if stage == "verifying":
             paths = context.get("changed_code_paths") or []
-            evidence = self.test_runner(root, self.profile, paths, record, attempt)
+            validation_paths = paths or ([item['path'] for item in context['plan_metadata']['manifest']
+                if safe_target(root, item['path']).is_file()] if classified else [])
+            try:
+                evidence = self.test_runner(root, self.profile, validation_paths, record, attempt)
+            except (TimeoutError, RuntimeError, ValueError) as error:
+                if not classified:
+                    raise
+                raise WorkflowFailure('Comprobación no disponible: ' + sanitize_log_value(str(error), 500)) from error
+            if classified and isinstance(evidence, dict):
+                evidence = {**evidence, 'candidate_revision': context.get('candidate_revision'), 'candidate_hash': code_hash()}
             context["tests"] = evidence
             context['verified_code_hash'] = _hash_files(attempt['base_sha'], {
                 p: (safe_target(root, p).read_bytes() if safe_target(root, p).exists() else None) for p in paths})
             if not isinstance(evidence, dict) or evidence.get("passed") is not True:
                 self._event(attempt, "verify_failed", evidence=evidence)
+                if classified:
+                    findings = evidence.get('findings') if isinstance(evidence, dict) else None
+                    if not findings:
+                        raise WorkflowFailure('Prueba fallida sin evidencia clasificable; no se presume error de implementación')
+                    return route_findings(findings)
                 context["correction_count"] = context.get("correction_count", 0) + 1
                 if context["correction_count"] > 2:
                     raise ValueError("Las pruebas obligatorias agotaron el límite de correcciones")
@@ -655,13 +803,19 @@ class ConversationEngine:
                 "task": "Contrastar especificaciones, tareas, pruebas y diff. JSON approved, findings[]",
                 "story": story.model_dump(), "specs": specs, "tasks": plan,
                 "test_evidence": evidence, "diff": diff,
-            }, instructions=self.cli.status(root, context['change_id']), approved_hash=context["plan_hash"])
+                **({'workflow_version': WORKFLOW_VERSION, 'findings_contract': finding_contract(),
+                    'evidence_bundle': shared_evidence(),
+                    'artifacts': {p: safe_target(root, p).read_text(encoding='utf-8') for p in context['plan_paths']},
+                    'task': 'Verificar candidato actual contra contrato aprobado. JSON approved boolean y findings[] tipados. Clasificar fallos; tareas sync/archive/PR posteriores quedan pendientes por diseño, no son fallos. Informaciones no bloqueantes no se incluyen en findings si approved=false.'} if classified else {}),
+            }, instructions=self.cli.status(root, context['change_id']), approved_hash=context["plan_hash"],
+               repo_context=repository_context() if classified else None)
             try:
                 independent = contextual_answer(models, 'verifier', {
                     'task': 'Revisión asesora independiente. JSON approved, findings[]. Nunca decide la publicación.',
                     'story': story.model_dump(), 'test_evidence': evidence, 'diff': diff[:20000],
                     'diff_truncated': len(diff) > 20000,
                 }, stage=stage, revision=revision, approved_sha256=context['plan_hash'],
+                    **({'candidate_revision': context.get('candidate_revision'), 'candidate_hash': code_hash()} if classified else {}),
                     context_manager=manager, phase='verify')
                 if not isinstance(independent.get('approved'), bool) or not isinstance(independent.get('findings'), list):
                     raise ContextResponseError('Contrato de asesor inválido')
@@ -673,6 +827,9 @@ class ConversationEngine:
             self._event(attempt, 'advisory', **context['advisory'])
             if check.get("approved") is not True:
                 findings = list(check.get("findings") or [])
+                if classified:
+                    self._event(attempt, 'verify_findings', findings=findings)
+                    return route_findings(findings)
                 context["correction_count"] = context.get("correction_count", 0) + 1
                 if context["correction_count"] > 2:
                     raise ValueError("La verificación agotó el límite de correcciones")
@@ -680,8 +837,13 @@ class ConversationEngine:
                 self._event(attempt, "verify_findings", findings=findings)
                 return "updating"
             self._event(attempt, "verify", evidence=evidence)
+            if classified:
+                context['semantic_verification'] = {'candidate_hash': code_hash(), 'plan_hash': context['plan_hash']}
+                context['task_evidence']['verification'] = 'passed'
             return "preparing_final_diff"
         if stage == "preparing_final_diff":
+            if classified and context.get('semantic_verification') != {'candidate_hash': code_hash(), 'plan_hash': context['plan_hash']}:
+                raise WorkflowFailure('Falta verificación semántica vigente del candidato', 'harness_defect')
             current_code = _hash_files(attempt['base_sha'], {
                 p: (safe_target(root, p).read_bytes() if safe_target(root, p).exists() else None)
                 for p in context['changed_code_paths']})
@@ -713,6 +875,8 @@ class ConversationEngine:
                 raise ValueError('Archive no produjo artefactos archivados verificables')
             self._event(attempt, 'sync', files=sorted(files), spec_hashes=synced)
             self._event(attempt, 'archive', change_id=context['change_id'], archive_hashes=archived)
+            if classified:
+                context['task_evidence'].update(sync='complete', archive='complete')
             self._event(attempt, "diff_ready", candidate_hash=context["candidate_hash"], diff_sha256=context["diff_sha256"])
             return 'publishing' if attempt.get('publication_mode', 'diff_review') == 'approved_plan' else 'awaiting_diff_review'
         if stage == "awaiting_diff_review":
@@ -747,6 +911,9 @@ class ConversationEngine:
                 attempt["revision"] += 1
                 attempt["openspec"] = {}
                 attempt["context"] = self._new_context()
+                if classified:
+                    attempt['context']['implementation_correction_count'] = context.get('implementation_correction_count', 0)
+                    attempt['context']['blocker_history'] = context.get('blocker_history', [])
                 self._event(attempt, "base_advanced", new_base_sha=remote_sha)
                 return "exploring"
             branch = f"feature/{re.sub(r'[^a-z0-9-]+', '-', story.hu.lower()).strip('-')[:60]}-{attempt['attempt_id'][:8]}"
@@ -773,6 +940,8 @@ class ConversationEngine:
             record["result"] = attempt["result"]
             record["changed_files"] = sorted(files)
             self._event(attempt, "publication_complete", pr_url=url, checks=checks)
+            if classified:
+                context['task_evidence']['publication'] = 'complete'
             return "complete"
         raise ValueError("Etapa conversacional no reconocida")
 
@@ -783,13 +952,30 @@ class ConversationEngine:
         return _hash_files(attempt['base_sha'], files)
 
     def _save_artifact(self, record: dict, attempt: dict, path: str, content: str, digest: str) -> None:
-        artifact_id = hashlib.sha256(path.encode("utf-8")).hexdigest()[:24]
+        revision = attempt['revision'] + 1
+        artifact_id = hashlib.sha256(json.dumps([path, revision, digest], ensure_ascii=False).encode('utf-8')).hexdigest()[:24]
         safe_content = sanitize_log_value(content, len(content))
-        self.store.save_openspec_artifact(record["run_id"], attempt["attempt_id"], artifact_id, {
+        artifact = {
             "run_id": record["run_id"], "attempt_id": attempt["attempt_id"], "path": path,
-            "sha256": digest, "content": safe_content,
-        })
-        attempt.setdefault("openspec", {}).setdefault("artifacts", {})[path] = {"artifact_id": artifact_id, "sha256": digest}
+            "sha256": digest, "content": safe_content, 'revision': revision,
+        }
+        existing = self.store.load_openspec_artifact(record['run_id'], attempt['attempt_id'], artifact_id)
+        if existing is None:
+            self.store.save_openspec_artifact(record['run_id'], attempt['attempt_id'], artifact_id, artifact)
+        elif existing != artifact:
+            raise ValueError('La versión histórica del artefacto contradice su identidad inmutable')
+        openspec = attempt.setdefault('openspec', {})
+        latest = openspec.setdefault('artifacts', {})
+        history = openspec.setdefault('artifact_history', {}).setdefault(path, [])
+        # A previous runtime may have used a path-only identity. Preserve that
+        # reference too, without overwriting or inventing its revision.
+        previous = latest.get(path)
+        if previous and not any(item['artifact_id'] == previous['artifact_id'] for item in history):
+            history.append(dict(previous))
+        reference = {'artifact_id': artifact_id, 'sha256': digest, 'revision': revision}
+        if not any(item['artifact_id'] == artifact_id for item in history):
+            history.append(reference)
+        latest[path] = reference
         self._event(attempt, "artifact_ready", path=path, sha256=digest)
         record["updated_at"] = _now()
         self._save(record)
