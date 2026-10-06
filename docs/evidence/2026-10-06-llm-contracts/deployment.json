@@ -1,0 +1,45 @@
+{
+  "deployment_id": "01f1c192a2291a5da478970895aab7dd",
+  "deployment_status": {
+    "message": "App started successfully",
+    "state": "SUCCEEDED"
+  },
+  "compute_status": {
+    "message": "App compute is running.",
+    "state": "ACTIVE"
+  },
+  "app_status": {
+    "message": "App has status: App is running",
+    "state": "RUNNING"
+  },
+  "url": "https://demo-dbx-harness-mvp-7405606739630987.7.azure.databricksapps.com",
+  "source_code_path": "/Workspace/Users/srinconr@creasistemas.com/apps/demo-harness-llm-contracts-20261006",
+  "snapshot_path": "/Workspace/Users/8910cd3e-32f6-4c75-b16f-b5ff3ea258d2/src/01f1c192a2291a5da478970895aab7dd",
+  "snapshot_checks": {
+    "app.yaml": "714d6ca3a8f37a6711a45c4c86c9eef0f44debca52e1ad05bae04888a37bc04c",
+    "harness/repo_context.py": "4a43fb909156c4a63af2a94f599b76b0247080a729759c0b31bc9a84e990b43f",
+    "harness/prompt_contracts.py": "2103f1925f8a20777a777ff368d84d9539904b463c499598511faac8735ddc75",
+    "harness/conversation.py": "a4637fc3fb0edbea10316b9fba4c39cd610037d7ee21e42c2c6e7f435830954e",
+    "harness/openspec.py": "a9e6f9ab9d4f58338c9317bb03574f5ac53aaad2f87d550122b90e2b1cf59e63",
+    "harness/skills.py": "4f18d903f94c81ae18f54bec8e29587e9493493c3c33180900b042108e1ca640",
+    "config/defaults/prompts.yaml": "c96a3f779301dc3499ca2fb35d0fa79438d4582559de561d120cc7afbecea4c1",
+    "config/defaults/models.yaml": "5006303ceb35a40eb53c695bd8721738ac7c422994625c78dbe002beea9ff7fe",
+    "config/deployment/client.yaml": "27ac71c9b2c0c3bdea588ee77d06df20eedb228fbf47002121404f6f7f0df01f"
+  },
+  "http": {
+    "/": 200,
+    "/configuration": 200,
+    "/runs/9f4d553d17ea406ca596600875735656": 200
+  },
+  "configuration": {
+    "profile": "naturapet",
+    "ui": {
+      "display_name": "NaturaPet"
+    },
+    "strategies": [
+      "general_patch"
+    ]
+  },
+  "historical_sha256": "97c8bd7f29fcd75f83c062294c69e4fd09e88fe7d7cfe97948b09fc3985af73d",
+  "historical_unchanged": true
+}

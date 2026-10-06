@@ -42,4 +42,14 @@ Sync verificado en `agent-prompt-contracts`, `change-planning` y `observability-
 
 Perfil seleccionado por el usuario: `CREA_DEV`. App: `demo-dbx-harness-mvp`. Antes del despliegue: compute STOPPED; siete registros, dos complete y cinco failed, ninguno queued/running. El archivo del run `9f4d553d17ea406ca596600875735656` conserva failed y `retryable=false`, SHA256 `97c8bd7f29fcd75f83c062294c69e4fd09e88fe7d7cfe97948b09fc3985af73d`.
 
-La validación local usa respuestas sintéticas: no acredita una nueva HU remota ni una llamada real del endpoint. El despliegue y su smoke HTTP se registrarán por separado con sus resultados observados. El intento histórico no se reintenta.
+La validación local usa respuestas sintéticas: no acredita una nueva HU remota ni una llamada real del endpoint. El intento histórico no se reintenta.
+
+## Despliegue observado
+
+Push confirmado de `903ff4b5fbf8d41d9777eb4437005198972c83e4` en `origin/Db_Spec_Harness`. El paquete se generó con `prepare_installation.py`, el perfil externo aprobado y `examples/naturapet/environment.yaml`. Su `app.yaml` conserva exactamente las referencias y valores de configuración del snapshot anterior; no contiene el valor del secreto. `bundle validate --strict -t dev --profile CREA_DEV` pasó desde el directorio del paquete. Una invocación inicial desde la raíz, sin variables de instalación, había rechazado sonnet_endpoint ausente; se corrigió el directorio antes del upload/deploy.
+
+Se cargaron 39 archivos en `/Workspace/Users/srinconr@creasistemas.com/apps/demo-harness-llm-contracts-20261006` mediante upload RAW para preservar extensiones. Se inició únicamente la App existente y se creó deployment SNAPSHOT `01f1c192a2291a5da478970895aab7dd`, creado 2026-10-06T14:31:35Z; terminó SUCCEEDED a 14:31:44Z. Compute ACTIVE y App RUNNING.
+
+Snapshot comprobado: `/Workspace/Users/8910cd3e-32f6-4c75-b16f-b5ff3ea258d2/src/01f1c192a2291a5da478970895aab7dd`. Nueve archivos clave, incluidos módulos modificados, prompts, routing, app.yaml y perfil cliente, coinciden por SHA256 con el paquete cargado. El perfil conserva SHA256 `27ac71c9b2c0c3bdea588ee77d06df20eedb228fbf47002121404f6f7f0df01f`.
+
+Smoke autenticado: GET `/`, `/configuration` y `/runs/9f4d553d17ea406ca596600875735656` devolvieron HTTP 200. Configuración naturapet/general_patch. El histórico mantiene failed, retryable=false y el SHA256 previo. Resultados y hashes en `deployment.json`. Se conserva el snapshot anterior para reversión. No se ejecutó una nueva HU ni se modificaron recursos cliente, permisos o secretos.
