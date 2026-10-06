@@ -1,0 +1,220 @@
+{
+  "product_revision": "9cb7c69588d46a240b0f80cc71e28edce0ebdbfc",
+  "verification_deployment": {
+    "deployment_id": "01f1c1c9a5ba1519aefb3981b06749bd",
+    "status": {
+      "message": "App started successfully",
+      "state": "SUCCEEDED"
+    },
+    "source_code_path": "/Workspace/Users/srinconr@creasistemas.com/apps/demo-harness-developer-contracts-20261006-verification",
+    "snapshot": {
+      "source_code_path": "/Workspace/Users/8910cd3e-32f6-4c75-b16f-b5ff3ea258d2/src/01f1c1c9a5ba1519aefb3981b06749bd"
+    },
+    "app_status": {
+      "message": "App has status: App is running",
+      "state": "RUNNING"
+    },
+    "url": "https://demo-dbx-harness-mvp-7405606739630987.7.azure.databricksapps.com",
+    "bindings_preserved": true,
+    "historical_runs_unchanged": true
+  },
+  "final_deployment": {
+    "deployment_id": "01f1c1c9cfd41716a59e93172acfaa2f",
+    "status": {
+      "message": "App started successfully",
+      "state": "SUCCEEDED"
+    },
+    "source_code_path": "/Workspace/Users/srinconr@creasistemas.com/apps/demo-harness-developer-contracts-20261006",
+    "snapshot": {
+      "source_code_path": "/Workspace/Users/8910cd3e-32f6-4c75-b16f-b5ff3ea258d2/src/01f1c1c9cfd41716a59e93172acfaa2f"
+    },
+    "app_status": {
+      "message": "App has status: App is running",
+      "state": "RUNNING"
+    },
+    "url": "https://demo-dbx-harness-mvp-7405606739630987.7.azure.databricksapps.com",
+    "bindings_preserved": true,
+    "historical_runs_unchanged": true
+  },
+  "checks": {
+    "snapshot_files_verified": 41,
+    "no_temporary_verifier": true,
+    "checks": [
+      {
+        "path": "/",
+        "status": 200
+      },
+      {
+        "path": "/configuration",
+        "status": 200
+      },
+      {
+        "path": "/runs/4684261fbd554fea87185a765dc754f8",
+        "status": 200
+      }
+    ],
+    "historical_runs_unchanged": true,
+    "bindings_preserved": true
+  },
+  "synthetic_model_verification": {
+    "identity": "8910cd3e-32f6-4c75-b16f-b5ff3ea258d2",
+    "attempt_id": "26955f0d253f48169592800275a233be",
+    "synthetic": true,
+    "pricing_source": "Sonnet 5.5: Databricks proprietary serving rate card (28.571/142.857 DBU per million input/output tokens) x Azure Retail Prices API East US 2 USD 0.07/DBU, checked 2026-10-05; rounded global estimates. Haiku 4.5: user-provided calculator screenshots 2026-09-25. Not invoiced rates; see docs/evidence/2026-10-05-sonnet55/verification.md.",
+    "checks": [
+      {
+        "managed": false,
+        "read_then_canonical_operation": true,
+        "synthetic_temp_edit_verified": true
+      },
+      {
+        "managed": false,
+        "injected_alias_rejected_without_write": true
+      },
+      {
+        "managed": true,
+        "read_then_canonical_operation": true,
+        "synthetic_temp_edit_verified": true
+      },
+      {
+        "managed": true,
+        "injected_alias_rejected_without_write": true
+      }
+    ],
+    "passed": true,
+    "evidence_path": "/Volumes/demo_harness_databricks_dev/dev_srinconr_demo_harness_databricks/artifacts/verification-developer-contracts/26955f0d253f48169592800275a233be.json",
+    "calls": [
+      {
+        "role": "developer",
+        "model": "databricks-claude-sonnet-5-5",
+        "input_tokens": 2551,
+        "output_tokens": 28,
+        "cost_usd": "0.005382",
+        "call_id": "b75aff308b184bcfa0951761540f018f",
+        "status": "complete",
+        "input_sha256": "c949a144c4da1aff98d129f3d3490dc5112267b90a103c56ffff0717b2e06c0d",
+        "output_sha256": "576d738bff09b8ad17df95d48864a1068c5e27f5653e2135479eca3e5d31db95",
+        "started_at": "2026-10-06 21:05:38.630914+00:00",
+        "completed_at": "2026-10-06 21:05:39.473039+00:00",
+        "context_provenance": {
+          "prompt": {
+            "version": "role-contracts-v6",
+            "catalog_sha256": "14f05d8f812dc6a6ae5af416761f73d5685b53dda7100caf190b45411b348d29",
+            "prompt_sha256": "dcb82c4818b0a4376055a68e93ff4574a381c2e8c33b04b3715b7ee778897188",
+            "contract_sha256": "794189cb3e9a3d8ea62cd20d00fbddc368258778434551ee3941cf08c835b0a3"
+          },
+          "context_management_enabled": false
+        },
+        "finish_reason": "stop",
+        "acceptance": "parsed"
+      },
+      {
+        "role": "developer",
+        "model": "databricks-claude-sonnet-5-5",
+        "input_tokens": 2665,
+        "output_tokens": 186,
+        "cost_usd": "0.007190",
+        "call_id": "44bbe2d86fef4a03a8d1d47bb2e7fda3",
+        "status": "complete",
+        "input_sha256": "11dba809787a736cea322fa95dcb171187e0aa4020c2a8de91308c0c6dc25435",
+        "output_sha256": "c97006ef37cc9e995067a37ae0ab16e4c99763f8ad63a8fe139f3ed06953d578",
+        "started_at": "2026-10-06 21:05:40.446405+00:00",
+        "completed_at": "2026-10-06 21:05:42.530326+00:00",
+        "context_provenance": {
+          "prompt": {
+            "version": "role-contracts-v6",
+            "catalog_sha256": "14f05d8f812dc6a6ae5af416761f73d5685b53dda7100caf190b45411b348d29",
+            "prompt_sha256": "dcb82c4818b0a4376055a68e93ff4574a381c2e8c33b04b3715b7ee778897188",
+            "contract_sha256": "794189cb3e9a3d8ea62cd20d00fbddc368258778434551ee3941cf08c835b0a3"
+          },
+          "context_management_enabled": false
+        },
+        "finish_reason": "stop",
+        "acceptance": "parsed"
+      },
+      {
+        "role": "developer",
+        "model": "databricks-claude-sonnet-5-5",
+        "input_tokens": 2572,
+        "output_tokens": 28,
+        "cost_usd": "0.005424",
+        "call_id": "2d3110ca4c13465a9b2e39a9cc166077",
+        "status": "complete",
+        "input_sha256": "34d200646ff3920abda42461da5cb5f6fc975edda794f7473dc851169fded584",
+        "output_sha256": "576d738bff09b8ad17df95d48864a1068c5e27f5653e2135479eca3e5d31db95",
+        "started_at": "2026-10-06 21:05:43.565358+00:00",
+        "completed_at": "2026-10-06 21:05:45.567809+00:00",
+        "context_provenance": {
+          "engine": "deterministic-context-v1",
+          "policy_sha256": "237449980cb4e70ae23b53cb03d46862cc683f39e0698fc8ee7d3471a6b201ab",
+          "catalog_sha256": "14f05d8f812dc6a6ae5af416761f73d5685b53dda7100caf190b45411b348d29",
+          "version": "role-contracts-v6",
+          "prompt_sha256": "dcb82c4818b0a4376055a68e93ff4574a381c2e8c33b04b3715b7ee778897188",
+          "contract_sha256": "794189cb3e9a3d8ea62cd20d00fbddc368258778434551ee3941cf08c835b0a3",
+          "snapshot_sha256": "7dbca1d6e6fdfd0b63c9df139b2ff812d75f2fd2cb4be088b577e4721eadd584",
+          "selection": {
+            "role": "developer",
+            "phase": "apply",
+            "included": [],
+            "excluded": [],
+            "reason": "direct",
+            "bytes_before": 6275,
+            "bytes_after": 6275,
+            "estimated_input_tokens": 6275,
+            "output_reserve_tokens": 12000,
+            "cache": {
+              "hits": 0,
+              "misses": 0,
+              "invalidations": 0
+            }
+          }
+        },
+        "finish_reason": "stop",
+        "acceptance": "parsed"
+      },
+      {
+        "role": "developer",
+        "model": "databricks-claude-sonnet-5-5",
+        "input_tokens": 2686,
+        "output_tokens": 186,
+        "cost_usd": "0.007232",
+        "call_id": "6adabab8fe1444b79c8b9d2178672f2b",
+        "status": "complete",
+        "input_sha256": "a1ebad375f38aa87d639509086c9d84f2a8b000758d4d7ee08415465ab7429d5",
+        "output_sha256": "77b02d5e1f575e2f371ff2dcadc731d87d796f373168678c13b1ac347eaab1ef",
+        "started_at": "2026-10-06 21:05:46.542807+00:00",
+        "completed_at": "2026-10-06 21:05:49.003495+00:00",
+        "context_provenance": {
+          "engine": "deterministic-context-v1",
+          "policy_sha256": "237449980cb4e70ae23b53cb03d46862cc683f39e0698fc8ee7d3471a6b201ab",
+          "catalog_sha256": "14f05d8f812dc6a6ae5af416761f73d5685b53dda7100caf190b45411b348d29",
+          "version": "role-contracts-v6",
+          "prompt_sha256": "dcb82c4818b0a4376055a68e93ff4574a381c2e8c33b04b3715b7ee778897188",
+          "contract_sha256": "794189cb3e9a3d8ea62cd20d00fbddc368258778434551ee3941cf08c835b0a3",
+          "snapshot_sha256": "18b41b95e1d1806378b7b9a8a699a24a0c7ee802578b3ffac4e5329e9526acc2",
+          "selection": {
+            "role": "developer",
+            "phase": "apply",
+            "included": [],
+            "excluded": [],
+            "reason": "direct",
+            "bytes_before": 6574,
+            "bytes_after": 6491,
+            "estimated_input_tokens": 6491,
+            "output_reserve_tokens": 12000,
+            "cache": {
+              "hits": 0,
+              "misses": 0,
+              "invalidations": 0
+            }
+          }
+        },
+        "finish_reason": "stop",
+        "acceptance": "parsed"
+      }
+    ]
+  },
+  "estimated_smoke_cost_usd": "0.025228",
+  "models_changed": false,
+  "client_hu_executed": false
+}

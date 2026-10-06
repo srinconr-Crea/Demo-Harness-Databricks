@@ -34,3 +34,15 @@ La suite del proyecto se distribuye en seis grupos de node IDs únicos, con temp
 Perfil CLI seleccionado por el usuario: CREA_DEV. App `demo-dbx-harness-mvp`, compute STOPPED; nueve registros, dos complete, seis failed y uno cancelled, sin pendientes. Se conservan hashes exactos de cada registro y todos los bindings para comparar después del despliegue. Fuente previa de rollback: `/Workspace/Users/srinconr@creasistemas.com/apps/demo-harness-corrections-20261006`.
 
 Paquete local `developer-contracts-20261006`: bundle validate --strict -t dev --profile CREA_DEV terminó Validation OK. Su app.yaml se copió byte a byte de la fuente previa y el perfil entregado coincide: SHA256 `27ac71c9b2c0c3bdea588ee77d06df20eedb228fbf47002121404f6f7f0df01f`. Esta validación no demuestra ejecución remota.
+
+## Entrega y verificación remota
+
+OpenSpec sincronizado y archivado en 2026-10-06-explicit-developer-operation-contracts, con 12/12 tareas. Commit de producto 9cb7c69588d46a240b0f80cc71e28edce0ebdbfc publicado y comprobado en origin/Db_Spec_Harness antes de cargar el paquete. Los cambios locales previos ajenos al ajuste quedaron fuera del commit.
+
+La sesión OAuth de CREA_DEV se renovó al detectar refresh token inválido. El arranque de la App generó primero un despliegue de su fuente anterior; se esperó a que terminara antes de enviar la fuente de verificación. No hubo cambios de bindings ni edición de históricos.
+
+Verificación con identidad de App: cuatro llamadas reales a databricks-claude-sonnet-5-5, coste estimado USD 0.025228 (no facturación). Cada modalidad on/off pidió una lectura y produjo una operación canónica con hash de bytes actuales; se aplicó exclusivamente en un directorio temporal sintético. Ambas rechazaron además un alias inyectado sin nueva llamada ni escritura. Uso, costo e identificadores originales están protegidos en el volumen del harness; deployment.json contiene el resumen sin textos de prompts/respuestas.
+
+Despliegue final 01f1c1c9cfd41716a59e93172acfaa2f: SUCCEEDED y App RUNNING. Se compararon SHA-256 de los 41 archivos del snapshot contra el paquete publicado y se comprobó ausencia del verificador temporal. GET /, /configuration y el histórico 4684261fbd554fea87185a765dc754f8 devolvieron 200. Los nueve históricos conservaron sus bytes; el incidente mantiene failed y su error original. Perfil, app.yaml y bindings permanecen iguales.
+
+La prueba remota acredita el contrato y ejecución sintética, no una HU real ni un PR cliente. El cambio de catálogo a role-contracts-v6 mantiene el control de compatibilidad para continuar intentos previos; no se forzó retry del incidente.
