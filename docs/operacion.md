@@ -151,6 +151,41 @@ el error público no reproduce arbitrariamente esas cadenas. Un defecto del
 documento identifica el artefacto y su representación o estructura requerida.
 Ambos se clasifican como `invalid_contract`: no se filtran operaciones ni se
 reinterpreta el texto para aparentar éxito, y no generan otra llamada automática.
+Para fallos nuevos de presentación (encabezados o representación Markdown), el
+diagnóstico identifica el artefacto y los títulos requeridos ausentes, ordenados,
+acotados y redactados. El planner recibe los encabezados canónicos de su plantilla
+CLI y debe conservarlos literalmente; el cuerpo se redacta en español. Esta
+instrucción y validación se aplican en propose/update con el gestor de contexto
+habilitado o deshabilitado. Specs y tasks conservan sus estructuras propias.
+
+Los defectos de presentación nuevos permiten Reintentar etapa por acción humana
+con identidad autorizada, failure_id, revisión, perfil, contexto, procedencia,
+checkpoint y lease/CAS vigentes. Se conservan evidencias y artefactos parciales,
+sin tratarlos como un plan aprobado. El plan regenerado exige aprobación vigente.
+El reinicio mantiene failed sin nuevas llamadas. No se convierten denegaciones
+de política, manifiestos inválidos o presupuestos incompatibles en errores
+recuperables de presentación. Los históricos conservan mensaje y retryable;
+`9f4d553d17ea406ca596600875735656` permanece no reintentable y repetir su HU
+requiere una ejecución nueva.
+
+Una respuesta final completa del planner con texto externo al JSON puede admitir
+una sola llamada correctora cuando se demuestre un único objeto completo, sin
+duplicados ni context_request, con contrato, Markdown y política válidos. Ese
+objeto se comprueba solo para elegibilidad: no se acepta por extracción. La
+corrección debe devolver únicamente JSON y preservar exactamente sus valores y
+tipos; se valida de nuevo antes de aceptar el artefacto y el plan sigue pasando
+OpenSpec estricto. Varios objetos, ambigüedad, contenido truncado o un contrato
+inválido impiden esa corrección. Los controles literales y recuperación de
+serialización anteriores conservan su alcance; el tope total es una llamada
+correctora por respuesta, sin recuperación recursiva ni presupuestos nuevos.
+
+XML o texto externo a una solicitud de contexto del explorador o planner produce
+malformed_json, sin lecturas ni corrección automática: solo reintento humano
+controlado. Ambas llamadas reales de una corrección final conservan call_id,
+parent_call_id/recovery_index, hashes y snapshots protegidos; la original conserva
+su aceptación rechazada. Cada llamada registra su uso y costo estimado propio
+cuando existe usage, y costo ausente cuando no existe. Fallos de almacenamiento
+detienen la operación sin fabricar aceptación ni perder el checkpoint previo.
 Los errores históricos conservan su mensaje original. La consulta de llamadas
 permite localizar `call_id` y `response_evidence_sha256` para revisar el original
 con los permisos existentes. Los presupuestos y reglas de retry no cambian.

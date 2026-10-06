@@ -32,7 +32,7 @@ from .openspec import (
     propose_client_change,
 )
 from .patch import FileOperation, apply_file_operations
-from .prompt_contracts import PromptContracts
+from .prompt_contracts import PromptContracts, ArtifactPresentationError
 from .repo_context import ContextResponseError, RepoContext, contextual_answer
 from .repository_policy import safe_target
 from .skills import SkillCatalog, digest
@@ -361,7 +361,7 @@ class ConversationEngine:
                         self._event(attempt, 'error', message=message, category=category)
                         attempt['failure'] = {'id': uuid.uuid4().hex, 'category': category,
                             'failed_stage': stage, 'revision': attempt['revision'],
-                            'retryable': isinstance(error, (ContextResponseError, ModelInvocationError, TimeoutError, RuntimeError))}
+                            'retryable': isinstance(error, (ContextResponseError, ArtifactPresentationError, ModelInvocationError, TimeoutError, RuntimeError))}
                         attempt['error'] = record['error'] = message
                         next_stage = 'failed'
                     attempt["stage"] = next_stage
@@ -392,7 +392,7 @@ class ConversationEngine:
                     record["state"] = attempt["state"]
                     record["updated_at"] = _now()
                     self._save(record)
-                    if step_error is not None and not isinstance(step_error, ContextResponseError):
+                    if step_error is not None and not isinstance(step_error, (ContextResponseError, ArtifactPresentationError)):
                         raise step_error
             except Exception as error:
                 # Release a claimed lease on a failed operation. The prior checkpoint

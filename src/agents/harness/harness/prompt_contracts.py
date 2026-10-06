@@ -8,8 +8,28 @@ import yaml
 from .patch import FileOperation
 from .repository_policy import valid_relative
 from .skills import digest
+from .models import sanitize_log_value
 
 CATALOG = Path(__file__).resolve().parents[1] / 'config/defaults/prompts.yaml'
+
+
+class ArtifactPresentationError(ValueError):
+    """Recoverable document presentation, never a policy or manifest denial."""
+    category = 'invalid_contract'
+
+
+def required_headings(payload):
+    if payload.get('artifact') in {'specs', 'tasks'}:
+        return []
+    return sorted({m.group(1).strip() for line in _document_lines(payload.get('template') or '')
+                   if '<!--' not in line and (m := re.match(r'^ {0,3}## +(.+?) *#*$', line))})
+
+
+def artifact_structure(payload):
+    return {'required_headings': required_headings(payload),
+            'instruction': 'Conserva literalmente los encabezados requeridos de la plantilla, sin traducirlos. '
+                           'Redacta el cuerpo en español. Specs conserva secciones delta y tasks sus checkboxes; '
+                           'content se serializa una sola vez. Una solicitud de contexto no contiene el documento final.'}
 
 
 def validate_planner_manifest(manifest, profile, artifact='proposal'):
@@ -66,8 +86,7 @@ def validate_artifact_content(content, payload):
     lines = _document_lines(content)
     headings = {m.group(1).strip() for line in lines
                 if (m := re.match(r'^ {0,3}## +(.+?) *#*$', line))}
-    required = {m.group(1).strip() for line in _document_lines(payload.get('template') or '')
-                if '<!--' not in line and (m := re.match(r'^## +(.+?) *#*$', line))}
+    required = set(required_headings(payload))
     if artifact == 'specs':
         required = set()
         valid = bool(headings & {'ADDED Requirements', 'MODIFIED Requirements', 'REMOVED Requirements', 'RENAMED Requirements'})
@@ -77,7 +96,34 @@ def validate_artifact_content(content, payload):
         valid = any(re.match(r'^ {0,3}#{1,6} +\S', line) for line in lines)
     if len(lines) < 2 or not valid or not required <= headings:
         reason = 'serialización adicional del Markdown' if '\\n' in content and '\n' not in content else 'estructura Markdown requerida ausente'
-        raise ValueError(f'Contrato del artefacto inválido ({artifact}: {reason})')
+        missing = sorted(required - headings)
+        detail = '; encabezados requeridos ausentes: ' + ', '.join(missing[:10]) if missing else ''
+        detail = sanitize_log_value(detail, 500)
+        raise ArtifactPresentationError(f'Contrato del artefacto inválido ({artifact}: {reason}{detail})')
+
+
+def validate_planner_output(value, payload, profile=None):
+    """Validate authority before diagnosing document presentation in every route."""
+    if payload.get('expected_expression') is not None:
+        from .contracts import parse_agent_output
+        if not isinstance(value, dict) or set(value) != {'content', 'strategy', 'code_path', 'expression'}:
+            raise ValueError('Contrato del artefacto inválido')
+        result = parse_agent_output('planner', json.dumps(value, ensure_ascii=False))
+        if (profile is None or profile.strategy is None
+                or result['strategy'] != profile.strategy.kind
+                or result['code_path'] != profile.strategy.notebook
+                or result['expression'] != payload['expected_expression']
+                or not profile.allows(result['code_path'])):
+            raise ValueError('El manifiesto del planner excede la política validada')
+    else:
+        if (not isinstance(value, dict) or set(value) - {'content', 'summary', 'manifest'}
+                or not isinstance(value.get('content'), str) or not 20 <= len(value['content']) <= 50000):
+            raise ValueError('Contrato del artefacto inválido')
+        if payload.get('artifact') == 'proposal' and profile and profile.general_patch:
+            if not isinstance(value.get('summary'), str) or not 1 <= len(value['summary']) <= 10000:
+                raise ValueError('Propuesta requiere manifiesto')
+            validate_planner_manifest(value.get('manifest'), profile)
+    validate_artifact_content(value['content'], payload)
 
 
 def planner_artifact_output(artifact, profile=None):
@@ -155,16 +201,7 @@ def validate_output(role, value, payload, profile):
                 or len(value['questions']) > 5 or any(not isinstance(q, str) or not 1 <= len(q) <= 2000 for q in value['questions'])):
             raise ValueError('Contrato de exploración inválido')
     elif role == 'planner':
-        if (set(value) - {'content', 'summary', 'manifest'} or not isinstance(value.get('content'), str)
-                or not 20 <= len(value['content']) <= 50000):
-            raise ValueError('Contrato del artefacto inválido')
-        if payload.get('artifact') == 'proposal' and profile.general_patch:
-            manifest = value.get('manifest')
-            if (not isinstance(value.get('summary'), str) or not 1 <= len(value['summary']) <= 10000
-                    or not isinstance(manifest, list) or not 1 <= len(manifest) <= profile.general_patch.max_files):
-                raise ValueError('Propuesta requiere manifiesto')
-            validate_planner_manifest(manifest, profile)
-        validate_artifact_content(value['content'], payload)
+        validate_planner_output(value, payload, profile)
     elif role == 'developer':
         if profile.general_patch:
             if set(value) - {'operations', 'notes'} or not isinstance(value.get('operations'), list):

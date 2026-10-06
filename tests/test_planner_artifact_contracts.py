@@ -83,7 +83,7 @@ def test_prompt_fields_and_serialization_example(tmp_path):
         assert set(planner_artifact_output(artifact, engine.profile)) == {'content'}
     prompt, provenance = PromptContracts().compose('planner', 'propose')
     assert 'Nunca incluyas rutas OpenSpec' in prompt and 'una sola vez' in prompt
-    assert provenance['version'] == 'role-contracts-v3'
+    assert provenance['version'] == 'role-contracts-v4'
 
 
 @pytest.mark.parametrize('enabled', [False, True])
@@ -111,11 +111,7 @@ def test_invalid_markdown_preserves_partial_checkpoint_without_extra_calls(tmp_p
                 response.text = json.dumps(value)
         return response
     models.complete = malformed
-    if enabled:
-        engine.act(run_id, 'answer', actor='ana', text='Salida 2', expected_revision=0, key='answer')
-    else:
-        with pytest.raises(ValueError, match='serialización'):
-            engine.act(run_id, 'answer', actor='ana', text='Salida 2', expected_revision=0, key='answer')
+    engine.act(run_id, 'answer', actor='ana', text='Salida 2', expected_revision=0, key='answer')
     record = engine.get(run_id)
     attempt = record['attempts'][-1]
     assert record['state'] == 'failed' and attempt['failure']['category'] == 'invalid_contract'

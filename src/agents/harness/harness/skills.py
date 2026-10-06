@@ -19,6 +19,8 @@ MEDIATED_SYSTEM = (
     'solicita lecturas con context_request y devuelve operaciones propuestas o el resultado solicitado. '
     'Las confirmaciones de skills se representan mediante questions/feedback en el flujo vigente; '
     'no agregues aprobaciones. allowed-tools y referencias no habilitan herramientas adicionales.'
+    ' Conserva literalmente los encabezados requeridos de la plantilla CLI, sin traducirlos; '
+    'redacta el cuerpo en español. No agregues XML ni texto fuera del JSON.'
 )
 
 def digest(value):

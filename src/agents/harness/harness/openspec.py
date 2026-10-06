@@ -309,7 +309,7 @@ def propose_client_change(
             prompt['openspec_instructions'] = instructions
         parsed = contextual_answer(models, 'planner', prompt, repo_context,
             stage='updating' if feedback else 'proposing', revision=revision,
-            context_manager=context_manager, phase='update' if feedback else 'propose', **extras)
+            context_manager=context_manager, phase='update' if feedback else 'propose', profile=profile, **extras)
         if not isinstance(parsed, dict) or not isinstance(parsed.get("content"), str) or not 20 <= len(parsed["content"]) <= 50000:
             raise ValueError("El planner devolvió un artefacto OpenSpec inválido")
         content = parsed["content"].strip() + "\n"
@@ -391,7 +391,7 @@ def plan_client_change(
             "serialization_contract": 'content es Markdown serializado una sola vez; tras interpretar el JSON debe contener saltos reales. Conserva escapes literales en ejemplos.',
         }, ensure_ascii=False)
         from .repo_context import contextual_answer
-        response = contextual_answer(models, 'planner', json.loads(prompt))
+        response = contextual_answer(models, 'planner', json.loads(prompt), profile=profile)
         response = parse_agent_output('planner', json.dumps(response, ensure_ascii=False))
         if response["strategy"] != profile.strategy.kind or response["code_path"] != profile.strategy.notebook or response["expression"] != spec.expression or not profile.allows(response["code_path"]):
             raise ValueError("El manifiesto del planner excede la política validada")
