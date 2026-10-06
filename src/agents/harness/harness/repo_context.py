@@ -8,7 +8,8 @@ from pathlib import Path
 
 from .repository_policy import safe_target
 from .prompt_contracts import (TOOLS, context_contract, validate_request, artifact_structure,
-                               validate_planner_output, ArtifactPresentationError)
+                               validate_planner_output, ArtifactPresentationError,
+                               developer_output_contract, DeveloperContractError)
 
 
 class ContextResponseError(ValueError):
@@ -352,6 +353,9 @@ def contextual_answer(
     models, role, prompt: dict, context: RepoContext | None = None, *, context_manager=None, phase=None, profile=None, **kwargs
 ):
     payload = dict(prompt)
+    trusted_profile = profile or (context.profile if context else context_manager.profile if context_manager else None)
+    if role == 'developer' and trusted_profile is not None:
+        payload['developer_output_contract'] = developer_output_contract(trusted_profile, payload)
     if profile is not None and not context_manager and phase is not None:
         from .prompt_contracts import PromptContracts
         system, provenance = PromptContracts().compose(role, phase)
@@ -415,10 +419,17 @@ def contextual_answer(
                         models.mark_response(role, response, 'invalid_contract')
                     if role == 'planner' or isinstance(error, ArtifactPresentationError):
                         raise
+                    if role == 'developer' and not isinstance(error, DeveloperContractError):
+                        raise
                     raise ContextResponseError('invalid_contract: ' + str(error), 'invalid_contract') from error
             elif profile is not None and role in {'developer', 'openspec_verifier'}:
                 from .prompt_contracts import validate_output
-                validate_output(role, value, payload, profile)
+                try:
+                    validate_output(role, value, payload, profile)
+                except DeveloperContractError as error:
+                    if hasattr(models, 'mark_response'):
+                        models.mark_response(role, response, 'invalid_contract')
+                    raise ContextResponseError('invalid_contract: ' + str(error), 'invalid_contract') from error
             return value
         request = value['context_request']
         try:

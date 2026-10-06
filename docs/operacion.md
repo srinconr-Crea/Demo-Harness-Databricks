@@ -270,6 +270,37 @@ Los errores históricos conservan su mensaje original. La consulta de llamadas
 permite localizar `call_id` y `response_evidence_sha256` para revisar el original
 con los permisos existentes. Los presupuestos y reglas de retry no cambian.
 
+## Contrato explícito del desarrollador
+
+Cada llamada de aplicación o corrección recibe `developer_output_contract`
+con formas, reglas y ejemplos derivados de los tipos del editor. Se conserva
+durante lecturas sucesivas, con el gestor de contexto habilitado o deshabilitado.
+El catálogo `role-contracts-v6` registra la nueva procedencia; la compatibilidad
+de intentos previos sigue sujeta a los controles existentes, sin reanudación
+automática ni cambio retroactivo de mensajes.
+
+`create` exige `op`, `path` y `content`, archivo ausente y hash previo ausente o
+null. `modify` exige además `expected_sha256` de los bytes actuales leídos.
+`delete` exige ese hash y contenido ausente o null. El contenido es el archivo
+completo UTF-8, no un diff. `base_sha256` y otros campos desconocidos se rechazan
+antes de escribir; los ejemplos no autorizan rutas fuera del manifiesto o perfil.
+
+En `classified-corrections-v1`, `coverage` declara exactamente una entrada por
+ruta: `applied` corresponde a una operación propuesta y no acredita ejecución
+ni pruebas; `already_conformant` requiere hash vigente sin edición; `blocked`
+requiere motivo. Para un borrado ya conforme, el hash prueba sus bytes exactos
+de base. `coverage.sha256` acredita evidencia y no reemplaza el hash de edición.
+Una lista vacía de operaciones con cobertura válida sigue pasando por pruebas
+y Sonnet. Históricos sin esa modalidad conservan su contrato sin cobertura
+obligatoria, y `silver_safe_ratio` conserva `expression` y `notes`.
+
+Los nuevos errores de forma identifican índice y campos canónicos o una etiqueta
+genérica segura, sin contenido, valores sensibles ni rutas arbitrarias. Ambas
+modalidades registran aceptación rechazada y conservan el original protegido,
+usage/costo por llamada cuando existen y el reintento humano vigente. No se
+renombran campos ni se agrega una llamada correctora. Denegaciones de política,
+hashes obsoletos y errores de persistencia mantienen sus controles propios.
+
 ## Solicitudes individuales de contexto
 
 El modelo solicita una sola operación por turno, exclusivamente mediante

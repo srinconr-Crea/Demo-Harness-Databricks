@@ -4,13 +4,95 @@ import re
 from pathlib import Path
 
 import yaml
+from pydantic import ValidationError
 
-from .patch import FileOperation
+from .patch import FileOperation, ManifestCoverage
 from .repository_policy import valid_relative
 from .skills import digest
 from .models import sanitize_log_value
 
 CATALOG = Path(__file__).resolve().parents[1] / 'config/defaults/prompts.yaml'
+
+
+class DeveloperContractError(ValueError):
+    """Invalid representation, separate from permission or candidate denials."""
+
+
+def developer_output_contract(profile, payload):
+    if not profile.general_patch:
+        return {'fields': {'expression': 'string de 1 a 500 caracteres',
+                           'notes': 'string opcional, máximo 10000 caracteres'},
+                'instruction': 'Solo expression y notes; no operations ni coverage.'}
+    policy = profile.general_patch
+    schema = FileOperation.model_json_schema()
+    schema['additionalProperties'] = False
+    examples = [
+        {'op': 'create', 'path': 'src/new.py', 'content': 'VALUE = 2\n'},
+        {'op': 'modify', 'path': 'src/value.py', 'content': 'VALUE = 2\n', 'expected_sha256': 'a' * 64},
+        {'op': 'delete', 'path': 'src/old.py', 'expected_sha256': 'a' * 64},
+    ]
+    value = {'fields': {'operations': 'lista de operaciones propuestas',
+                        'notes': 'string opcional, máximo 10000 caracteres'},
+             'operation_schema': schema,
+             'rules': [
+                 'create: content obligatorio; expected_sha256 ausente o null; archivo ausente.',
+                 'modify: content y expected_sha256 obligatorios.',
+                 'delete: expected_sha256 obligatorio; content ausente o null.',
+                 'content es el archivo completo UTF-8, no diff ni fragmento; serializado una sola vez.',
+                 'expected_sha256 es el SHA-256 de los bytes actuales leídos, nunca un hash inventado.',
+                 'Solo op/path/content/expected_sha256. base_sha256 es inválido; no se admiten aliases ni campos extra.',
+                 'Usa únicamente rutas del manifiesto aprobado y operaciones permitidas; un ejemplo no concede permisos.',
+             ],
+             'limits': {'max_files': policy.max_files, 'max_bytes': policy.max_bytes,
+                        'operations': list(policy.operations), 'allowed_paths': list(policy.allowed_paths),
+                        'extensions': list(policy.extensions), 'max_output_bytes': 2097152},
+             'examples': [e for e in examples if e['op'] in policy.operations],
+             'example_notice': 'Rutas y hashes ilustrativos sintéticos: sustituir con manifiesto y evidencia real.'}
+    if payload.get('workflow_version') == 'classified-corrections-v1':
+        value['fields']['coverage'] = 'lista obligatoria, exactamente una entrada por ruta del manifiesto'
+        value['coverage_schema'] = ManifestCoverage.model_json_schema()
+        value['coverage_rules'] = [
+            'applied: operación propuesta en operations; no acredita escritura ni pruebas superadas.',
+            'already_conformant: sin operación y sha256 obligatorio de bytes actuales comprobados.',
+            'Para delete ya conforme/ausente, sha256 prueba los bytes exactos de base del archivo borrado.',
+            'blocked: reason obligatorio con motivo, sin ampliar permisos.',
+            'coverage.sha256 acredita conformidad; expected_sha256 protege la edición: no son intercambiables.',
+            'operations vacío requiere cobertura completa verificable y sigue pasando por pruebas y Sonnet.',
+            'Un archivo creado durante el intento admite modify con hash actual si el efecto acumulado sigue siendo create aprobado.',
+        ]
+    return value
+
+
+def _operation(item, index):
+    label = f'operations[{index}]'
+    if not isinstance(item, dict):
+        raise DeveloperContractError(f'{label}: requiere objeto')
+    fields = set(FileOperation.model_fields)
+    extras = set(item) - fields
+    issues = []
+    if extras:
+        issues.append('campo no admitido base_sha256' if 'base_sha256' in extras else 'campo adicional no admitido')
+    required = {'op', 'path'}
+    op = item.get('op')
+    if not isinstance(op, str):
+        raise DeveloperContractError(f'{label}: tipo inválido (op)')
+    if op in {'create', 'modify'}:
+        required.add('content')
+    if op in {'modify', 'delete'}:
+        required.add('expected_sha256')
+    missing = sorted(field for field in required if item.get(field) is None)
+    if missing:
+        issues.append('campos obligatorios: ' + ', '.join(missing))
+    if issues:
+        raise DeveloperContractError(label + ': ' + '; '.join(issues))
+    try:
+        return FileOperation.model_validate(item)
+    except ValidationError as error:
+        # Never expose Pydantic input, arbitrary keys, paths or model content.
+        known = sorted({e['loc'][0] for e in error.errors(include_input=False)
+                        if e['loc'] and e['loc'][0] in fields})
+        detail = ', '.join(known) if known else 'combinación op/content/expected_sha256'
+        raise DeveloperContractError(f'{label}: tipo o regla inválida ({detail})') from None
 
 
 class ArtifactPresentationError(ValueError):
@@ -208,22 +290,22 @@ def validate_output(role, value, payload, profile):
     elif role == 'developer':
         if profile.general_patch:
             if set(value) - {'operations', 'notes', 'coverage'} or not isinstance(value.get('operations'), list):
-                raise ValueError('Operaciones inválidas')
+                raise DeveloperContractError('Operaciones inválidas')
             if not 0 <= len(value['operations']) <= profile.general_patch.max_files:
                 raise ValueError('Límite de operaciones')
-            for item in value['operations']:
-                if not isinstance(item, dict) or set(item) - {'op', 'path', 'content', 'expected_sha256'}:
-                    raise ValueError('Campos de operación inválidos')
-                operation = FileOperation.model_validate(item)
+            for index, item in enumerate(value['operations']):
+                operation = _operation(item, index)
                 if not profile.allows_code(operation.path):
                     raise ValueError('Operación fuera del perfil')
             if payload.get('workflow_version') == 'classified-corrections-v1':
-                from .patch import ManifestCoverage
                 coverage = value.get('coverage')
                 if not isinstance(coverage, list) or len(coverage) > profile.general_patch.max_files:
-                    raise ValueError('Cobertura inválida')
-                for item in coverage:
-                    ManifestCoverage.model_validate(item)
+                    raise DeveloperContractError('Cobertura inválida')
+                for index, item in enumerate(coverage):
+                    try:
+                        ManifestCoverage.model_validate(item)
+                    except ValidationError:
+                        raise DeveloperContractError(f'coverage[{index}]: campos, tipos o evidencia inválidos') from None
         elif set(value) - {'expression', 'notes'} or not isinstance(value.get('expression'), str) or not 1 <= len(value['expression']) <= 500:
             raise ValueError('Expresión inválida')
     else:
@@ -238,6 +320,8 @@ def validate_output(role, value, payload, profile):
             if bool(value['findings']) == value['approved']:
                 raise ValueError('Aprobación y hallazgos bloqueantes contradictorios')
     if 'notes' in value and (not isinstance(value['notes'], str) or len(value['notes']) > 10000):
+        if role == 'developer' and profile.general_patch:
+            raise DeveloperContractError('Notas inválidas')
         raise ValueError('Notas inválidas')
     if len(json.dumps(value, ensure_ascii=False).encode('utf-8')) > 2097152:
         raise ValueError('Salida fuera del presupuesto')

@@ -692,7 +692,7 @@ class ConversationEngine:
                          for path in change_root.rglob('*.md')}
             if self.profile.general_patch:
                 proposal = answer("developer", 'apply', {
-                    "task": "Aplicar las tareas aprobadas. Responder JSON operations[] con op/path/content/expected_sha256 y notes.",
+                    "task": "Aplicar las tareas aprobadas conforme a developer_output_contract.",
                     "story": story.model_dump(), "artifacts": artifacts,
                     "source_summary": (json.dumps([repository_context().request({'op': 'read_file', 'path': item['path']})
                         for item in context['plan_metadata']['manifest'] if item['op'] != 'create'], ensure_ascii=False)
@@ -702,9 +702,7 @@ class ConversationEngine:
                     'approved_manifest': context['plan_metadata']['manifest'],
                     **({'workflow_version': WORKFLOW_VERSION, 'stage_task': stage,
                         'evidence_bundle': shared_evidence(),
-                        'coverage_contract': [{'path': 'ruta del manifiesto', 'status': 'applied|already_conformant|blocked',
-                                               'sha256': 'hash actual obligatorio si ya conforme', 'reason': 'explicación de conformidad/bloqueo'}],
-                        'task': 'Corregir o aplicar tareas aprobadas. No reescribir archivos ya conformes. JSON operations[], coverage[] de todas las entradas, notes. Nunca ampliar permisos.'}
+                        'task': 'Corregir o aplicar tareas aprobadas conforme a developer_output_contract. No reescribir archivos ya conformes. Nunca ampliar permisos.'}
                        if classified else {}),
                 }, instructions=apply_context, approved_hash=approved["sha256"], repo_context=repository_context())
                 raw = proposal.get("operations")

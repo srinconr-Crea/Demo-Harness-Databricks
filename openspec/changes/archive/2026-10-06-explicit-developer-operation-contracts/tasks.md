@@ -1,0 +1,25 @@
+# Tasks
+
+## 1. Contrato canónico y modalidades
+
+- [x] 1.1 Añadir pruebas inicialmente fallidas del descriptor de developer general_patch: campos/enums derivados del editor, reglas create/modify/delete, hash actual, archivo completo, límites del perfil, ejemplos validados y rechazo de base_sha256. Verificación: registrar el fallo previo a implementación y después comprobar que los ejemplos pasan FileOperation/ManifestCoverage y que reglas inválidas se rechazan.
+- [x] 1.2 Implementar el descriptor en prompt_contracts.py desde los tipos de patch.py, compartiendo reglas de forma cuando sea necesario sin duplicar el editor; seleccionar coverage solo para classified-corrections-v1 y expression/notes para silver_safe_ratio. Verificación: pruebas de 1.1 más combinaciones ausente/null compatibles, notes opcional, operaciones restringidas del perfil y modificación con hash actual de un archivo creado durante el intento.
+- [x] 1.3 Versionar prompts.yaml y describir el contrato explícito y la distinción entre expected_sha256, coverage.sha256 y applied pendiente de pruebas; actualizar docs/operacion.md con esas reglas y la modalidad histórica. Verificación: pruebas de catálogo/hash y comprobación de que modelos, tarifas, workflow_version y límites conservan sus valores.
+
+## 2. Contrato en las llamadas efectivas
+
+- [x] 2.1 Añadir pruebas inicialmente fallidas que capturen payload/messages en la frontera de invocación para applying y correcting con gestor on/off, incluyendo read_file seguido de salida final. Verificación: demostrar que la ruta actual pierde campos y que cada llamada esperada debe conservar developer_output_contract sin mezclarlo con context_request.
+- [x] 2.2 Integrar el descriptor confiable en contextual_answer antes de prepare/serialización y conservar task como descripción en conversation.py; no aceptar descriptor suministrado por HU o repositorio. Verificación: pruebas de 2.1, intentos de sustitución sintéticos, modalidad histórica y silver_safe_ratio, más tests existentes de solicitudes de contexto.
+- [x] 2.3 Comprobar que snapshots y procedencia vigentes reflejan el contrato enviado, y medir su incremento de bytes con los presupuestos actuales; documentar resultado local y compatibilidad de continuación en la evidencia del cambio. Verificación: hashes cambian al cambiar contrato, cada ronda conserva descriptor y el exceso de presupuesto bloquea sin truncar contenido obligatorio ni aumentar límites.
+
+## 3. Diagnóstico y persistencia de rechazos
+
+- [x] 3.1 Añadir pruebas inicialmente fallidas para diagnóstico de operations[0] con base_sha256 y expected_sha256 ausente, tipos/campos requeridos y combinaciones de contenido/hash inválidas; incluir claves/valores sensibles sintéticos. Verificación: el mensaje usa solo índice y campos canónicos o etiquetas genéricas, dentro de un límite fijo, sin contenido, rutas o input completo de Pydantic.
+- [x] 3.2 Implementar diagnóstico seguro de forma y registro común de acceptance=invalid_contract en contextual_answer para developer con gestor on/off, conservando respuesta original protegida y errores de almacenamiento. Verificación: pruebas de 3.1 y de persistencia muestran rechazo, call_id/hashes/usage/costo propios cuando existen, sin aliases convertidos ni llamadas correctoras.
+- [x] 3.3 Probar y conservar categoría, retry y ausencia de escrituras para denegación de política, hash obsoleto, fallo de almacenamiento y consulta de históricos; documentar en docs/operacion.md el nuevo mensaje y su alcance. Verificación: comparación con comportamiento previo y fixtures históricos confirma que no se recalculan mensajes/retryable ni se reanuda un fallo al reiniciar.
+
+## 4. Verificación integrada y preparación de entrega
+
+- [x] 4.1 Ejecutar un recorrido sintético reducido del incidente: respuesta con base_sha256 falla antes de escritura/publicación; continuación humana compatible con expected_sha256 llega a validación de hashes/manifiesto, pruebas y Sonnet simulados. Incluir coverage incompleta, bloqueada y already_conformant, y una corrección que preserve el contrato. Verificación: asserts sobre archivos, llamadas, aprobación vigente, checkpoint, aceptación rechazada y verificación real del runner sintético; no invocar ni modificar NaturaPet.
+- [x] 4.2 Ejecutar suites enfocadas de contratos/contexto/correcciones/recuperación y la suite completa tests/ antes de publicar, usando el entorno del proyecto y temporales Windows permitidos. Verificación: comandos, revisión exacta, conteos, fallos y limitaciones registrados en docs/evidence/ del cambio; cualquier fallo relevante queda resuelto antes de afirmar éxito.
+- [x] 4.3 Revisar coherencia de implementación, delta y guía, ejecutar OpenSpec validate del cambio en modo strict y git diff --check sobre el alcance, y preparar evidencia de cambios exclusivamente del harness. Verificación: validación sin errores, sin cambios de modelo/infraestructura/perfil ni alteración de trabajo local previo; distinguir pruebas locales de despliegue y dejar despliegue/smoke remoto/reintento de HU para autorización operativa posterior.
