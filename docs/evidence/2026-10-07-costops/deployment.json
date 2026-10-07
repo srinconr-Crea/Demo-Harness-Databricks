@@ -1,0 +1,204 @@
+{
+  "product_sha": "3b4a167a5db4b59231a7033ecf19e3638e90fb98",
+  "deployment_id": "01f1c25ae28c16108b65387c4622fe1f",
+  "source_code_path": "/Workspace/Users/srinconr@creasistemas.com/apps/demo-harness-costops-20261007-3b4a167",
+  "snapshot_source": "/Workspace/Users/8910cd3e-32f6-4c75-b16f-b5ff3ea258d2/src/01f1c25ae28c16108b65387c4622fe1f",
+  "app_state": "RUNNING",
+  "url": "https://demo-dbx-harness-mvp-7405606739630987.7.azure.databricksapps.com",
+  "snapshot_files_verified": 42,
+  "historical_files_unchanged": 141,
+  "profile_sha256": "27ac71c9b2c0c3bdea588ee77d06df20eedb228fbf47002121404f6f7f0df01f",
+  "bindings_preserved": true,
+  "http_checks": [
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/configuration",
+      "status": 200
+    },
+    {
+      "path": "/runs/339bbcda32a848b18743cdc4c1cc06e9",
+      "status": 200
+    },
+    {
+      "path": "/runs/4684261fbd554fea87185a765dc754f8",
+      "status": 200
+    }
+  ],
+  "llm_calls_performed": 0,
+  "verified_at_utc": "2026-10-07T14:27:46.367073+00:00",
+  "deployed_files": [
+    {
+      "path": ".env.example",
+      "sha256": "160303084c3541bbf60f581d42d1a1cd8d10886947a02959c20068f74ab451f2"
+    },
+    {
+      "path": "app/index.html",
+      "sha256": "8b47ee6ae968dd40a25bec6cf7d76e2e5fd5d3189c7e22e51954c20a6a2dec25"
+    },
+    {
+      "path": "app/provision_run_state.py",
+      "sha256": "7d6aac2a8653096cea9275c694e0cd2e51b815637083214979db1156f0c59adc"
+    },
+    {
+      "path": "app/sandbox_job_runner.py",
+      "sha256": "571ef4596609494fac9f977e40b5e17d3dc3321fe8354bcc6163bd40a5998e0f"
+    },
+    {
+      "path": "app/start_server.py",
+      "sha256": "6c7caa5453d181e1cecacb0cbbb512b7bb4a7466ec7580f3433519019d5caca3"
+    },
+    {
+      "path": "app.yaml",
+      "sha256": "714d6ca3a8f37a6711a45c4c86c9eef0f44debca52e1ad05bae04888a37bc04c"
+    },
+    {
+      "path": "config/defaults/agents.yaml",
+      "sha256": "bd8b463264c9328037258a2df57d4cab56234751ac6d45856227c9a06c4a15bf"
+    },
+    {
+      "path": "config/defaults/context.yaml",
+      "sha256": "e899bf9259ce78cac10524208b2b302d3d395e027292a7af3097f2707cfa2f4f"
+    },
+    {
+      "path": "config/defaults/models.yaml",
+      "sha256": "3fd19f4c01dcd463ffa3bc08f6b6fb81585dde44cd662759fc5cb91a7181d76e"
+    },
+    {
+      "path": "config/defaults/prompts.yaml",
+      "sha256": "c293185c568717d2d54c15adf4d5385f8e72a1c3b0e579b6777ba9d389c7f024"
+    },
+    {
+      "path": "config/defaults/runtime.yaml",
+      "sha256": "1390bb0bf0aa9b5c00c0bc0de1efb22a39fab51beb9080a111d08178d18185b4"
+    },
+    {
+      "path": "config/deployment/client.yaml",
+      "sha256": "27ac71c9b2c0c3bdea588ee77d06df20eedb228fbf47002121404f6f7f0df01f"
+    },
+    {
+      "path": "harness/__init__.py",
+      "sha256": "d1d58f87bfdb444b420fd786f4bd453b3dc788b4c6873268abfb717bfb6d49b2"
+    },
+    {
+      "path": "harness/capability_contract.py",
+      "sha256": "12aa6f9889ea88309d75f7c5217cced3b447ed77f0971bf873f2d02360b8cd46"
+    },
+    {
+      "path": "harness/checkout.py",
+      "sha256": "41e94081d18ddb81302a732bf34a474bc9b9e3489695e98aab67fee65bed76dc"
+    },
+    {
+      "path": "harness/client_config.py",
+      "sha256": "d89d4da243f41988f2ff95f3d78465d4466e9db61ff180cd0eeff0a8fd512324"
+    },
+    {
+      "path": "harness/context_manager.py",
+      "sha256": "44b4ec31aae7bee208c5c11ea04f0a4c3048d7e2f1641813629cecaf2aa9da8c"
+    },
+    {
+      "path": "harness/contracts.py",
+      "sha256": "e0a4012e6b7a3529cf24b7f23a324e5dcbe927256eb3b8903701da9e6c4338cb"
+    },
+    {
+      "path": "harness/conversation.py",
+      "sha256": "896737073ea0a95c7f54895bd7190413472e027f7cf3f81bc2bd28a5dbcfda5a"
+    },
+    {
+      "path": "harness/conversation_webapp.py",
+      "sha256": "3ea409ca091ddda20004db9ab96de9120ac01ab7e7cfc065788c4f0d2bec45b8"
+    },
+    {
+      "path": "harness/coordination.py",
+      "sha256": "e5ac14519be3a2605db6359596301db67e13212f175c0b71f12e79b55d32ea07"
+    },
+    {
+      "path": "harness/evaluation.py",
+      "sha256": "41d25e846186f59984eeb00d1837d07471d09462fb7d00628bc5e046054138db"
+    },
+    {
+      "path": "harness/failure_routing.py",
+      "sha256": "959c958aaac9d3c9a5d111e52489ae10b5129942a8c6377c49eb1559b234e784"
+    },
+    {
+      "path": "harness/github.py",
+      "sha256": "f1e1bb8b8c478e563cef0d93093b918e0bc3facd436823746ae2815302a450e2"
+    },
+    {
+      "path": "harness/models.py",
+      "sha256": "c8920d8449df24b57be51991954b03b11fb1cb5b79f4b5f2e357fd3c178001b7"
+    },
+    {
+      "path": "harness/notebook_edit.py",
+      "sha256": "dd90373f6793969e34c4053ea1f20fc86a82e1dec2ad115b71bcef1b05102a74"
+    },
+    {
+      "path": "harness/openspec.py",
+      "sha256": "1c10c78149067bd486299c579c190d287b1db86908b0dec085ef628c5482e7c3"
+    },
+    {
+      "path": "harness/patch.py",
+      "sha256": "1fe3a63f0e6424862ac56b7dadad8f6653f47bd8e988e935dc873f27041894a0"
+    },
+    {
+      "path": "harness/progress.py",
+      "sha256": "f1329df460de8e93520d4330129695e79805a2bb8500e47fb59843e6df90b0cc"
+    },
+    {
+      "path": "harness/prompt_contracts.py",
+      "sha256": "a884922eddc855e52fdea7ed7e303d916592e2a3ca24adebac4198ed6d7ad3a6"
+    },
+    {
+      "path": "harness/repo_context.py",
+      "sha256": "766341f2ae594a68d0b9e626b25fc91c494fd200215a48ad3466c154cfe5775f"
+    },
+    {
+      "path": "harness/repository_policy.py",
+      "sha256": "fb8a6bb313acb6e39d98d1b8d9b709a5ddfad5a3a35e24ff1e8c93fd00eefb22"
+    },
+    {
+      "path": "harness/sandbox.py",
+      "sha256": "b4d396f2dd7616710d2f12fc5d638f51e98e53d8596c894938609701596932e6"
+    },
+    {
+      "path": "harness/sandbox_job.py",
+      "sha256": "4abb9165ea45dccff0783babd8a7129ed728f31ce4955c6276021227aa5e2e73"
+    },
+    {
+      "path": "harness/skills.py",
+      "sha256": "ce8c1a6a032aa6d52117d6e282fe9e99c4ced2110b1f5442d373f4d5e46a4adc"
+    },
+    {
+      "path": "harness/store.py",
+      "sha256": "c8e756736dc6f5a318201616714ad6e5679bab9f18cc3692b933717b840debc2"
+    },
+    {
+      "path": "harness/strategies.py",
+      "sha256": "83ff3c6b9d5dff09e5ea5df0dcc56963dde34406f576bd03be0f1fb293a04961"
+    },
+    {
+      "path": "harness/validation.py",
+      "sha256": "26e9715d76872f96e833ff20a8ee9a9f65ff60e0bf78504393ebc162762a741a"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "a600e53f82ae3c779892dd60dee3c3470db057f16bac5585143e09f305361692"
+    },
+    {
+      "path": "package.json",
+      "sha256": "4ac3a0add006a0d3d6f252f05325d56b9b766fdd67cbc3d40668f25d21022ee3"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "0177790bb5854b0a5f19dc64a423fbd1b449a4c4c0012e4731149d0cba2b5a1d"
+    },
+    {
+      "path": "uv.lock",
+      "sha256": "8b26db6fea80069f83377799a8ca8c1ae0a354293c2e10ea5fade77a2cbe92b4"
+    }
+  ],
+  "documentation_tests_passed": 6,
+  "git_diff_check": "passed"
+}
