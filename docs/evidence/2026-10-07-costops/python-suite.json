@@ -1,0 +1,102 @@
+{
+  "collected": 474,
+  "groups": [
+    {
+      "group": 0,
+      "cases": 79,
+      "exit_code": 0,
+      "tail": [
+        "........................................................................ [ 91%]",
+        ".......                                                                  [100%]",
+        "============================== warnings summary ===============================",
+        "src\\agents\\harness\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1",
+        "  C:\\Users\\Stiveen Rincon Ruge\\Documents\\ChatGPT\\MVP-Databricks-Harness\\src\\agents\\harness\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.",
+        "    from starlette.testclient import TestClient as TestClient  # noqa",
+        "",
+        "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html",
+        "79 passed, 1 warning in 895.47s (0:14:55)"
+      ]
+    },
+    {
+      "group": 1,
+      "cases": 79,
+      "exit_code": 0,
+      "tail": [
+        "........................................................................ [ 91%]",
+        ".......                                                                  [100%]",
+        "============================== warnings summary ===============================",
+        "src\\agents\\harness\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1",
+        "  C:\\Users\\Stiveen Rincon Ruge\\Documents\\ChatGPT\\MVP-Databricks-Harness\\src\\agents\\harness\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.",
+        "    from starlette.testclient import TestClient as TestClient  # noqa",
+        "",
+        "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html",
+        "79 passed, 1 warning in 859.74s (0:14:19)"
+      ]
+    },
+    {
+      "group": 2,
+      "cases": 79,
+      "exit_code": 0,
+      "tail": [
+        "........................................................................ [ 91%]",
+        ".......                                                                  [100%]",
+        "============================== warnings summary ===============================",
+        "src\\agents\\harness\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1",
+        "  C:\\Users\\Stiveen Rincon Ruge\\Documents\\ChatGPT\\MVP-Databricks-Harness\\src\\agents\\harness\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.",
+        "    from starlette.testclient import TestClient as TestClient  # noqa",
+        "",
+        "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html",
+        "79 passed, 1 warning in 1254.47s (0:20:54)"
+      ]
+    },
+    {
+      "group": 3,
+      "cases": 79,
+      "exit_code": 0,
+      "tail": [
+        "........................................................................ [ 91%]",
+        ".......                                                                  [100%]",
+        "============================== warnings summary ===============================",
+        "src\\agents\\harness\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1",
+        "  C:\\Users\\Stiveen Rincon Ruge\\Documents\\ChatGPT\\MVP-Databricks-Harness\\src\\agents\\harness\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.",
+        "    from starlette.testclient import TestClient as TestClient  # noqa",
+        "",
+        "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html",
+        "79 passed, 1 warning in 1054.19s (0:17:34)"
+      ]
+    },
+    {
+      "group": 4,
+      "cases": 79,
+      "exit_code": 0,
+      "tail": [
+        "........................................................................ [ 91%]",
+        ".......                                                                  [100%]",
+        "============================== warnings summary ===============================",
+        "src\\agents\\harness\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1",
+        "  C:\\Users\\Stiveen Rincon Ruge\\Documents\\ChatGPT\\MVP-Databricks-Harness\\src\\agents\\harness\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.",
+        "    from starlette.testclient import TestClient as TestClient  # noqa",
+        "",
+        "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html",
+        "79 passed, 1 warning in 966.86s (0:16:06)"
+      ]
+    },
+    {
+      "group": 5,
+      "cases": 79,
+      "exit_code": 0,
+      "tail": [
+        "........................................................................ [ 91%]",
+        ".......                                                                  [100%]",
+        "============================== warnings summary ===============================",
+        "src\\agents\\harness\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1",
+        "  C:\\Users\\Stiveen Rincon Ruge\\Documents\\ChatGPT\\MVP-Databricks-Harness\\src\\agents\\harness\\.venv\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.",
+        "    from starlette.testclient import TestClient as TestClient  # noqa",
+        "",
+        "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html",
+        "79 passed, 1 warning in 1202.02s (0:20:02)"
+      ]
+    }
+  ],
+  "duration_seconds": 1256.18
+}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import copy
 import json
 import re
 import time
@@ -10,12 +11,12 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 import yaml
 
-from .contracts import estimate_cost
+from .contracts import PricingSnapshot, estimate_cost
 
 
 def load_model_config(path: str | Path) -> tuple[dict[str, str], dict[str, tuple[Decimal, Decimal]], str]:
@@ -28,13 +29,38 @@ def load_model_config(path: str | Path) -> tuple[dict[str, str], dict[str, tuple
     if any(routing.get(role) != "databricks-claude-sonnet-5-5"
            for role in ("explorer", "developer", "openspec_verifier")):
         raise ValueError("Los flujos OpenSpec requieren databricks-claude-sonnet-5-5")
-    prices = {
-        endpoint: (Decimal(str(rates["input_usd_per_token"])), Decimal(str(rates["output_usd_per_token"])))
-        for endpoint, rates in config["pricing"]["endpoints"].items()
-    }
+    try:
+        prices = {
+            endpoint: (Decimal(str(rates["input_usd_per_token"])), Decimal(str(rates["output_usd_per_token"])))
+            for endpoint, rates in config["pricing"]["endpoints"].items()
+        }
+    except (InvalidOperation, KeyError, TypeError) as error:
+        raise ValueError('Cada tarifa requiere entrada y salida decimales válidas') from error
+    if any(not rate.is_finite() or rate <= 0 for pair in prices.values() for rate in pair):
+        raise ValueError('Cada tarifa debe ser decimal finita y positiva')
     if not set(routing.values()).issubset(prices):
         raise ValueError("Faltan tarifas configuradas para un endpoint permitido")
     return routing, prices, str(config["pricing"]["source"])
+
+
+def load_pricing_snapshots(path: str | Path) -> dict[str, dict]:
+    """Optional for legacy configs; validate all metadata for revised defaults."""
+    config = yaml.safe_load(Path(path).read_text(encoding='utf-8'))['pricing']
+    if 'version' not in config:
+        return {}
+    snapshots = {}
+    for endpoint, rates in config['endpoints'].items():
+        snapshot = PricingSnapshot.model_validate({
+            **{key: config[key] for key in ('version', 'currency', 'checked_at', 'effective_from',
+                                           'source', 'sku', 'usd_per_dbu', 'limitations')},
+            **rates,
+        })
+        for direction in ('input', 'output'):
+            expected = getattr(snapshot, f'{direction}_dbu_per_million') * snapshot.usd_per_dbu / Decimal('1000000')
+            if expected != getattr(snapshot, f'{direction}_usd_per_token'):
+                raise ValueError('La tarifa del snapshot no reproduce DBU por millón')
+        snapshots[endpoint] = snapshot.model_dump(mode='json')
+    return snapshots
 
 
 def load_runtime_config(path: str | Path) -> dict:
@@ -77,6 +103,7 @@ class ModelResponse:
     recovery_index: int | None = None
     normalized_sha256: str | None = None
     normalized_text: str | None = None
+    pricing_snapshot: dict | None = None
 
 
 _PRIVATE_KEY = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.DOTALL)
@@ -103,10 +130,18 @@ class ModelInvocationError(RuntimeError, ValueError):
 
 
 class ModelClient:
-    def __init__(self, api, routing: dict[str, str], prices: dict[str, tuple[Decimal, Decimal]], on_call: Callable[[str, ModelResponse], None] | None = None, *, log_text_limit: int = 32000, usage_context: dict[str, str] | None = None, system_prompt: str | None = None, max_tokens: int = 2000, role_max_tokens: dict | None = None, endpoint_capabilities: dict | None = None, max_context_tokens: int = 524288):
+    def __init__(self, api, routing: dict[str, str], prices: dict[str, tuple[Decimal, Decimal]], on_call: Callable[[str, ModelResponse], None] | None = None, *, log_text_limit: int = 32000, usage_context: dict[str, str] | None = None, system_prompt: str | None = None, max_tokens: int = 2000, role_max_tokens: dict | None = None, endpoint_capabilities: dict | None = None, max_context_tokens: int = 524288, pricing_snapshots: dict | None = None):
         self.api = api
         self.routing = routing
         self.prices = prices
+        if any(not isinstance(rate, Decimal) or not rate.is_finite() or rate <= 0
+               for pair in prices.values() for rate in pair):
+            raise ValueError('Cada tarifa debe ser decimal finita y positiva')
+        self.pricing_snapshots = copy.deepcopy(pricing_snapshots or {})
+        for endpoint, snapshot in self.pricing_snapshots.items():
+            validated = PricingSnapshot.model_validate(snapshot)
+            if (validated.input_usd_per_token, validated.output_usd_per_token) != prices.get(endpoint):
+                raise ValueError('Las tarifas del snapshot difieren del cálculo')
         self.calls: list[ModelResponse] = []
         self.on_call = on_call
         self.log_text_limit = log_text_limit
@@ -178,6 +213,7 @@ class ModelClient:
             "effective_max_tokens": body['max_tokens'],
             "parent_call_id": parent_call_id,
             "recovery_index": recovery_index,
+            "pricing_snapshot": copy.deepcopy(self.pricing_snapshots.get(model)),
         }
         try:
             api = self.advisory_api if role == 'verifier' and self.advisory_api is not None else self.api

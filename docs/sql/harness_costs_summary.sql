@@ -171,7 +171,22 @@ logical_client_keys AS (
   FROM logical_calls c LEFT JOIN request_totals t USING(run_id,attempt_id,call_id)
   LEFT JOIN conflicted_matches x USING(run_id,attempt_id,call_id)
 ), costops_result AS (
-SELECT * FROM reconciled
+SELECT story_id AS hu_id,run_id,attempt_id,model,role,stage,status,acceptance,
+  count(*) AS calls_total,count_if(logical_state<>'unique') AS calls_with_logical_conflicts,count(input_tokens) AS calls_with_input_tokens,count(output_tokens) AS calls_with_output_tokens,
+  sum(input_tokens) AS input_tokens_known,sum(output_tokens) AS output_tokens_known,
+  count(estimated_cost_usd) AS calls_with_historical_cost,
+  sum(estimated_cost_usd) AS historical_cost_known_usd,
+  CASE WHEN count(estimated_cost_usd)=count(*) THEN 'complete' ELSE 'partial' END AS historical_cost_coverage,
+  count(costo_reestimado_tarifa_revisada) AS calls_with_revised_cost,
+  sum(costo_reestimado_tarifa_revisada) AS revised_cost_known_usd,
+  CASE WHEN count(costo_reestimado_tarifa_revisada)=count(*) THEN 'complete' ELSE 'partial' END AS revised_cost_coverage,
+  count_if(reconciliation_state='missing') AS calls_missing_physical,
+  count_if(reconciliation_state='multiple') AS calls_with_multiple_requests,
+  count_if(reconciliation_state='conflict') AS calls_with_physical_conflicts,
+  sum(request_count) AS requests_total,sum(physical_input_tokens_known) AS physical_input_tokens_known,
+  sum(physical_output_tokens_known) AS physical_output_tokens_known,
+  max(started_at) AS last_call_utc,'cache_components_not_observed; estimate_not_invoice' AS pricing_limitation
+FROM reconciled GROUP BY story_id,run_id,attempt_id,model,role,stage,status,acceptance
 ), costops_result_marker AS (
   SELECT *,true AS _costops_has_row FROM costops_result
 )
@@ -181,4 +196,4 @@ WHERE CASE WHEN p.fecha_desde IS NULL OR p.fecha_hasta IS NULL OR p.fecha_desde>
   THEN raise_error('CostOps: fecha_desde/fecha_hasta deben formar un rango valido')
   ELSE coalesce(r._costops_has_row,false) END
 
-ORDER BY r.started_at,r.run_id,r.attempt_id,r.call_id;
+ORDER BY r.hu_id,r.run_id,r.attempt_id,r.model,r.role,r.stage;

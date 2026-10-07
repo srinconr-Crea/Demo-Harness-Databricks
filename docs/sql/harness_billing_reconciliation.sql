@@ -170,8 +170,97 @@ logical_client_keys AS (
          THEN 'complete' ELSE 'incomplete' END AS physical_token_coverage
   FROM logical_calls c LEFT JOIN request_totals t USING(run_id,attempt_id,call_id)
   LEFT JOIN conflicted_matches x USING(run_id,attempt_id,call_id)
+)
+,
+selected_days AS (
+  SELECT DISTINCT endpoint_id,endpoint_name,to_date(convert_timezone(current_timezone(),'America/Bogota',CAST(request_time AS TIMESTAMP_NTZ))) AS local_day
+  FROM compatible_requests WHERE endpoint_id IS NOT NULL OR endpoint_name IS NOT NULL
+),
+-- BEGIN BILLING SOURCE
+billing_source AS (
+  SELECT record_id,account_id,workspace_id,sku_name,cloud,usage_unit,usage_quantity,
+    usage_start_time,usage_end_time,usage_date,record_type,ingestion_date,
+    usage_metadata.endpoint_id AS endpoint_id,usage_metadata.endpoint_name AS endpoint_name,
+    usage_metadata.app_name AS app_name,usage_metadata.warehouse_id AS warehouse_id,usage_metadata.job_id AS job_id
+  FROM system.billing.usage CROSS JOIN bounds p
+  WHERE workspace_id='7405606739630987' AND usage_end_time > p.inicio_utc AND usage_start_time < p.fin_utc AND p.valid_range
+),
+-- END BILLING SOURCE
+-- BEGIN PRICE SOURCE
+price_source AS (
+  SELECT account_id,sku_name,cloud,usage_unit,currency_code,price_start_time,price_end_time,
+    CAST(pricing.effective_list.default AS DECIMAL(38,18)) AS list_price
+  FROM system.billing.list_prices WHERE currency_code='USD'
+),
+-- END PRICE SOURCE
+billing_selected AS (
+  SELECT b.*,CASE WHEN b.app_name='demo-dbx-harness-mvp' THEN 'app'
+    WHEN b.warehouse_id='9e696889dea65361' THEN 'sql_warehouse'
+    WHEN b.job_id='611081415041874' THEN 'sandbox_job' ELSE 'inference' END AS component,
+    CASE WHEN p.hu_id<>'' OR p.run_id<>'' OR p.attempt_id<>'' OR p.model<>'' OR p.call_id<>''
+         THEN 'endpoint_period_shared' ELSE 'harness_resources_and_endpoint_period_shared' END AS attribution_scope
+  FROM billing_source b CROSS JOIN bounds p WHERE
+    ((p.hu_id='' AND p.run_id='' AND p.attempt_id='' AND p.model='' AND p.call_id='') AND
+      (b.app_name='demo-dbx-harness-mvp' OR b.warehouse_id='9e696889dea65361' OR b.job_id='611081415041874'))
+    OR EXISTS (SELECT 1 FROM selected_days d WHERE
+      ((d.endpoint_id IS NOT NULL AND b.endpoint_id=d.endpoint_id) OR (d.endpoint_name IS NOT NULL AND b.endpoint_name=d.endpoint_name))
+      AND b.usage_end_time>make_timestamp(year(d.local_day),month(d.local_day),day(d.local_day),0,0,0,'America/Bogota')
+      AND b.usage_start_time<make_timestamp(year(date_add(d.local_day,1)),month(date_add(d.local_day,1)),day(date_add(d.local_day,1)),0,0,0,'America/Bogota'))
+), billing_distinct AS (
+  SELECT DISTINCT * FROM billing_selected
+), billing_rows AS (
+  SELECT record_id, count(*) AS record_variants,
+    CASE WHEN count(*)=1 THEN max(account_id) END AS account_id,
+    CASE WHEN count(*)=1 THEN max(workspace_id) END AS workspace_id,
+    CASE WHEN count(*)=1 THEN max(sku_name) END AS sku_name,
+    CASE WHEN count(*)=1 THEN max(cloud) END AS cloud,
+    CASE WHEN count(*)=1 THEN max(usage_unit) END AS usage_unit,
+    CASE WHEN count(*)=1 THEN max(usage_quantity) END AS usage_quantity,
+    CASE WHEN count(*)=1 THEN max(usage_start_time) END AS usage_start_time,
+    CASE WHEN count(*)=1 THEN max(usage_end_time) END AS usage_end_time,
+    CASE WHEN count(*)=1 THEN max(usage_date) END AS usage_date,
+    CASE WHEN count(*)=1 THEN max(record_type) END AS record_type,
+    CASE WHEN count(*)=1 THEN max(ingestion_date) END AS ingestion_date,
+    CASE WHEN count(*)=1 THEN max(endpoint_id) END AS endpoint_id,
+    CASE WHEN count(*)=1 THEN max(endpoint_name) END AS endpoint_name,
+    CASE WHEN count(*)=1 THEN max(app_name) END AS app_name,
+    CASE WHEN count(*)=1 THEN max(warehouse_id) END AS warehouse_id,
+    CASE WHEN count(*)=1 THEN max(job_id) END AS job_id,
+    CASE WHEN count(*)=1 THEN max(component) END AS component,
+    CASE WHEN count(*)=1 THEN max(attribution_scope) END AS attribution_scope
+  FROM billing_distinct GROUP BY record_id
+), price_matches AS (
+  SELECT b.record_id,count(p.sku_name) AS price_matches,
+    count_if(p.price_start_time<=b.usage_start_time AND (p.price_end_time IS NULL OR p.price_end_time>=b.usage_end_time)) AS full_price_matches,
+    CASE WHEN count(p.sku_name)=1 THEN max(p.list_price) END AS list_price
+  FROM billing_rows b LEFT JOIN price_source p ON b.account_id=p.account_id AND b.sku_name=p.sku_name
+    AND b.cloud=p.cloud AND b.usage_unit=p.usage_unit AND p.currency_code='USD'
+    AND p.price_start_time<b.usage_end_time AND (p.price_end_time IS NULL OR p.price_end_time>b.usage_start_time)
+  GROUP BY b.record_id
+), billed AS (
+  SELECT b.*,m.price_matches,m.full_price_matches,m.list_price,
+    CASE WHEN b.record_variants>1 OR b.record_id IS NULL THEN 'conflicting_or_missing_record_id' WHEN m.price_matches=0 THEN 'missing_price' WHEN m.price_matches>1 THEN 'ambiguous_or_crossing_price'
+      WHEN m.full_price_matches<>1 THEN 'crossing_price_boundary' WHEN m.list_price IS NULL THEN 'missing_price_value'
+      WHEN try_cast(b.usage_quantity AS DECIMAL(27,18)) IS NULL
+        OR try_cast(b.usage_quantity AS DECIMAL(27,18))<>b.usage_quantity
+        OR try_cast(m.list_price AS DECIMAL(10,6)) IS NULL
+        OR try_cast(m.list_price AS DECIMAL(10,6))<>m.list_price OR m.list_price<0 THEN 'invalid_decimal_precision'
+      ELSE 'unique' END AS price_state,
+    CASE WHEN b.record_variants=1 AND b.record_id IS NOT NULL AND m.price_matches=1 AND m.full_price_matches=1
+      AND try_cast(b.usage_quantity AS DECIMAL(27,18))=b.usage_quantity
+      AND try_cast(m.list_price AS DECIMAL(10,6))=m.list_price AND m.list_price>=0
+      THEN try_cast(b.usage_quantity AS DECIMAL(27,18))*try_cast(m.list_price AS DECIMAL(10,6)) END AS list_cost_usd
+  FROM billing_rows b LEFT JOIN price_matches m USING(record_id)
 ), costops_result AS (
-SELECT * FROM reconciled
+SELECT component,attribution_scope,endpoint_id,endpoint_name,sku_name,cloud,usage_unit,
+  min(usage_start_time) AS coverage_start_utc,max(usage_end_time) AS coverage_end_utc,
+  max(ingestion_date) AS last_ingestion_date,count(*) AS billing_records,
+  collect_set(record_type) AS record_types,sum(usage_quantity) AS net_usage_quantity,
+  count_if(price_state='unique') AS records_with_unique_price,sum(list_cost_usd) AS list_cost_known_usd,
+  CASE WHEN count(list_cost_usd)=count(*) THEN 'complete' ELSE 'partial' END AS monetary_coverage,
+  collect_set(price_state) AS price_diagnostics,
+  'list_price_not_invoice; shared_endpoint_cost_not_HU_cost; billing_may_lag' AS limitation
+FROM billed GROUP BY component,attribution_scope,endpoint_id,endpoint_name,sku_name,cloud,usage_unit
 ), costops_result_marker AS (
   SELECT *,true AS _costops_has_row FROM costops_result
 )
@@ -181,4 +270,4 @@ WHERE CASE WHEN p.fecha_desde IS NULL OR p.fecha_hasta IS NULL OR p.fecha_desde>
   THEN raise_error('CostOps: fecha_desde/fecha_hasta deben formar un rango valido')
   ELSE coalesce(r._costops_has_row,false) END
 
-ORDER BY r.started_at,r.run_id,r.attempt_id,r.call_id;
+ORDER BY r.component,r.endpoint_name,r.sku_name;

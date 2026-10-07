@@ -1,0 +1,48 @@
+{
+  "profile": "CREA_DEV",
+  "warehouse_id": "9e696889dea65361",
+  "sql_readonly": true,
+  "results": [
+    {
+      "file": "docs\\sql\\harness_billing_reconciliation.sql",
+      "statement_id": "01f1c256-a3e2-1dd4-bb00-0d1a5b2f3b0d",
+      "status": {
+        "state": "SUCCEEDED"
+      },
+      "rows": 9
+    },
+    {
+      "file": "docs\\sql\\harness_costops_quality.sql",
+      "statement_id": "01f1c256-a3e7-1bdd-aa79-c7a988ec1a2e",
+      "status": {
+        "state": "PENDING"
+      },
+      "rows": null
+    },
+    {
+      "file": "docs\\sql\\harness_costs_by_call.sql",
+      "statement_id": "01f1c256-6ac3-1941-8cb3-fb2c2ebe3634",
+      "status": {
+        "state": "SUCCEEDED"
+      },
+      "rows": 128
+    },
+    {
+      "file": "docs\\sql\\harness_costs_summary.sql",
+      "statement_id": "01f1c256-6aba-14fd-b8e8-692fb2e0546f",
+      "status": {
+        "state": "SUCCEEDED"
+      },
+      "rows": 29
+    },
+    {
+      "file": "docs\\sql\\harness_endpoint_usage_join.sql",
+      "statement_id": "01f1c256-6a67-1bc6-95c2-d8f48f3da471",
+      "status": {
+        "state": "SUCCEEDED"
+      },
+      "rows": 128
+    }
+  ],
+  "note": "Intermediate smoke before reviewer fixes; final verification evidence must be read separately. Fingerprints omitted because queries changed after submission."
+}

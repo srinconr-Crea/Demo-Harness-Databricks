@@ -1,0 +1,27 @@
+{
+  "base_sha": "47756733afa86ec82980dd8724d0775cb163efc3",
+  "branch": "Db_Spec_Harness",
+  "date": "2026-10-07",
+  "product_sha256": {
+    "docs/sql/harness_billing_reconciliation.sql": "c33200fca22cdc92f6674c9d734273f91f838f8a8259a4231bac3d0413fb9bd8",
+    "docs/sql/harness_costops_quality.sql": "1c7fd48740a7061e241d3e8eb682269e6de1c1f5affcd624f25094d25051bd5e",
+    "docs/sql/harness_costs_by_call.sql": "508defe71d4c51579a8878082a4fdcb2b474ea41c6396333a42947fd105af1b6",
+    "docs/sql/harness_costs_summary.sql": "1f7d4223ff8c639a8fe1d786e9567f386ec5260573dd1d3cfa64ebb5fd378799",
+    "docs/sql/harness_endpoint_usage_join.sql": "7c940cace82e156b39fcd7c84cecb2626bedfac28366737a80076d4836d69d1b",
+    "docs/sql/run_costops.py": "0637e6d67ff1491a05cbae122fa21caf07c889101ef2b4cf607de04c2fe13ae7",
+    "src/agents/harness/config/defaults/models.yaml": "9ac960c77db14584313ba999b0f320607a37e84a378122a7adc19ebdae80f33d",
+    "src/agents/harness/harness/models.py": "afd5279f781e301d997675d3bd41c8c286073328c3cb0df1091f3677196a754c",
+    "src/agents/harness/harness/contracts.py": "2e4aa593695ffa5e4738484150312ee008cfcf24da4bb6757124a8e47e332960",
+    "src/agents/harness/app/start_server.py": "f4779c0a74aa445e0d7ad56d995222be3bccb7895179123487b6bb35c6d2ca59",
+    "tests/test_costops_pricing.py": "b70a4466694287658530470642601a177c0fae519b1e140a1fc17162e68fca36",
+    "tests/test_costops_sql.py": "42352c2cbd8d10d63266de3d78f0b2b019b496666e7f307f7fe4f13f3f9db1f8"
+  },
+  "python_product_tests_passed": 474,
+  "sql_tests_passed": 21,
+  "total_distinct_tests_passed": 495,
+  "readonly_statement_execution_verified": true,
+  "detail_summary_decimal_totals_equal": true,
+  "deployment_performed": false,
+  "runtime_static_review": "no blockers",
+  "sql_static_review": "findings resolved and regression fixtures passed"
+}

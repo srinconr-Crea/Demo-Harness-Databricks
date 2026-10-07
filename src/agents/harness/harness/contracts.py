@@ -266,8 +266,26 @@ class RunContract(BaseModel):
     stop_requests: list[dict] = Field(default_factory=list)
 
 
+class PricingSnapshot(BaseModel):
+    """Immutable numeric assumptions, independent of billing or invoice amounts."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+    version: str = Field(min_length=1)
+    currency: Literal['USD'] = 'USD'
+    checked_at: str = Field(pattern=r'^\d{4}-\d{2}-\d{2}$')
+    effective_from: str = Field(min_length=1)
+    source: str = Field(min_length=1)
+    sku: str = Field(min_length=1)
+    input_usd_per_token: Decimal = Field(gt=0, allow_inf_nan=False)
+    output_usd_per_token: Decimal = Field(gt=0, allow_inf_nan=False)
+    usd_per_dbu: Decimal = Field(gt=0, allow_inf_nan=False)
+    input_dbu_per_million: Decimal = Field(gt=0, allow_inf_nan=False)
+    output_dbu_per_million: Decimal = Field(gt=0, allow_inf_nan=False)
+    limitations: str = Field(min_length=1)
+
+
 class AgentCallContract(BaseModel):
-    schema_version: int = 3
+    schema_version: int = 4
     call_id: str
     run_id: str
     attempt_id: str
@@ -307,6 +325,7 @@ class AgentCallContract(BaseModel):
     estimated_cost_usd: Decimal | None = None
     currency: Literal["USD"] = "USD"
     pricing_source: str
+    pricing_snapshot: PricingSnapshot | None = None
 
 
 class AnalystOutput(BaseModel):

@@ -12,11 +12,21 @@ routing:
   verifier: databricks-claude-haiku-4-5
 pricing:
   currency: USD
-  source: 'Sonnet 5.5: Databricks proprietary serving rate card (28.571/142.857 DBU per million input/output tokens) x Azure Retail Prices API East US 2 USD 0.07/DBU, checked 2026-10-05; rounded global estimates. Haiku 4.5: user-provided calculator screenshots 2026-09-25. Not invoiced rates; see docs/evidence/2026-10-05-sonnet55/verification.md.'
+  version: harness-costops-2026-10-07
+  checked_at: '2026-10-07'
+  effective_from: '2026-10-07T00:00:00Z'
+  sku: PREMIUM_ANTHROPIC_MODEL_SERVING
+  usd_per_dbu: '0.105'
+  source: 'Databricks proprietary serving rate card https://www.databricks.com/product/pricing/proprietary-foundation-model-serving checked 2026-10-07; AZURE system.billing.list_prices PREMIUM_ANTHROPIC_MODEL_SERVING USD 0.105/DBU effective since 2025-03-26; exact product of published DBU rates, not invoice. See docs/evidence/2026-10-07-costops/pricing.md.'
+  limitations: 'Standard global pay-per-token assumption; no regional processing uplift. Cache read/write components are not distinguished in prompt_tokens; estimates use reported input/output totals and are not billing or invoice amounts.'
   endpoints:
     databricks-claude-sonnet-5-5:
-      input_usd_per_token: 0.000002
-      output_usd_per_token: 0.000010
+      input_dbu_per_million: '28.571'
+      output_dbu_per_million: '142.857'
+      input_usd_per_token: '0.000002999955'
+      output_usd_per_token: '0.000014999985'
     databricks-claude-haiku-4-5:
-      input_usd_per_token: 0.0000015
-      output_usd_per_token: 0.0000075
+      input_dbu_per_million: '14.286'
+      output_dbu_per_million: '71.429'
+      input_usd_per_token: '0.000001500030'
+      output_usd_per_token: '0.000007500045'

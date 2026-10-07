@@ -28,6 +28,7 @@ from harness.github import GitHubAppClient
 from harness.models import (
     ModelClient,
     load_model_config,
+    load_pricing_snapshots,
     load_runtime_config,
     sanitize_log_value,
 )
@@ -38,6 +39,7 @@ from harness.store import LocalRunStore, VolumeRunStore
 
 PROFILE = load_selected_profile(ROOT)
 ROUTING, PRICES, PRICING_SOURCE = load_model_config(ROOT / "config" / "defaults" / "models.yaml")
+PRICING_SNAPSHOTS = load_pricing_snapshots(ROOT / "config" / "defaults" / "models.yaml")
 RUNTIME = load_runtime_config(ROOT / "config" / "defaults" / "runtime.yaml")
 AGENT_CONFIG = yaml.safe_load((ROOT / "config" / "defaults" / "agents.yaml").read_text(encoding="utf-8"))
 MODEL_CONFIG = yaml.safe_load((ROOT / 'config' / 'defaults' / 'models.yaml').read_text(encoding='utf-8'))
@@ -103,11 +105,13 @@ def models_factory(run_id: str, attempt_id: str):
             error=response.error, input_tokens=response.input_tokens,
             output_tokens=response.output_tokens, estimated_cost_usd=response.cost_usd,
             pricing_source=PRICING_SOURCE,
+            pricing_snapshot=response.pricing_snapshot,
         )
         STORE.save_agent_call(run_id, response.call_id, contract.model_dump(mode="json"))
 
     client = ModelClient(
         WORKSPACE.api_client, ROUTING, PRICES, on_call=save_call,
+        pricing_snapshots=PRICING_SNAPSHOTS,
         log_text_limit=RUNTIME["logging"]["max_text_chars"],
         system_prompt=AGENT_CONFIG["system_prompt"], max_tokens=AGENT_CONFIG["max_tokens"],
         role_max_tokens=AGENT_CONFIG.get('role_max_tokens'),

@@ -1,0 +1,260 @@
+[
+  {
+    "report": "harness_costs_by_call",
+    "run_id": "339bbcda32a848b18743cdc4c1cc06e9",
+    "call_id": "",
+    "statement_id": "01f1c258-4c15-1c52-9224-e9ac98556784",
+    "state": "SUCCEEDED",
+    "row_count": 15,
+    "financial_subtotals": {
+      "costo_historico_estimado_usd": {
+        "known_rows": 15,
+        "known_subtotal_usd": "1.043762500000000000"
+      },
+      "costo_reestimado_tarifa_revisada": {
+        "known_rows": 15,
+        "known_subtotal_usd": "1.556796736740"
+      }
+    },
+    "financial_samples": [
+      {
+        "hu_id": "HU-BRONZE-001-V1.6: Normalizar nombres de tablas para archivos CSV, JSON y Parquet.",
+        "run_id": "339bbcda32a848b18743cdc4c1cc06e9",
+        "attempt_id": "b0f36d03053f4cbe9823f9382a0f8077",
+        "call_id": "c7c7576b686d453daaadcd0ddd82e36c",
+        "model": "databricks-claude-sonnet-5-5",
+        "role": "explorer",
+        "stage": "exploring",
+        "status": "complete",
+        "acceptance": "parsed",
+        "input_tokens": "29382",
+        "output_tokens": "92",
+        "costo_historico_estimado_usd": "0.059684000000000000",
+        "costo_reestimado_tarifa_revisada": "0.089524676430",
+        "logical_state": "unique",
+        "history_state": "matched"
+      }
+    ]
+  },
+  {
+    "report": "harness_endpoint_usage_join",
+    "run_id": "339bbcda32a848b18743cdc4c1cc06e9",
+    "call_id": "",
+    "statement_id": "01f1c258-4c12-1dff-93f1-04189449f45d",
+    "state": "SUCCEEDED",
+    "row_count": 15,
+    "financial_subtotals": {
+      "costo_reestimado_tarifa_revisada": {
+        "known_rows": 15,
+        "known_subtotal_usd": "1.556796736740"
+      }
+    },
+    "reconciliation_counts": {
+      "single": 15
+    },
+    "financial_samples": [
+      {
+        "story_id": "HU-BRONZE-001-V1.6: Normalizar nombres de tablas para archivos CSV, JSON y Parquet.",
+        "run_id": "339bbcda32a848b18743cdc4c1cc06e9",
+        "attempt_id": "b0f36d03053f4cbe9823f9382a0f8077",
+        "call_id": "c7c7576b686d453daaadcd0ddd82e36c",
+        "model": "databricks-claude-sonnet-5-5",
+        "role": "explorer",
+        "stage": "exploring",
+        "status": "complete",
+        "acceptance": "parsed",
+        "input_tokens": "29382",
+        "output_tokens": "92",
+        "estimated_cost_usd": "0.059684000000000000",
+        "costo_reestimado_tarifa_revisada": "0.089524676430",
+        "request_count": "1",
+        "physical_request_ids": "[\"a8165f52-532b-4b5b-b815-298a637c7c99\"]",
+        "physical_input_tokens_known": "29382",
+        "physical_output_tokens_known": "92",
+        "reconciliation_state": "single",
+        "physical_token_coverage": "complete",
+        "logical_state": "unique",
+        "history_state": "matched"
+      }
+    ]
+  },
+  {
+    "report": "harness_costs_summary",
+    "run_id": "339bbcda32a848b18743cdc4c1cc06e9",
+    "call_id": "",
+    "statement_id": "01f1c258-4c73-1753-9cc1-4199cbe37570",
+    "state": "SUCCEEDED",
+    "row_count": 5,
+    "financial_subtotals": {
+      "historical_cost_known_usd": {
+        "known_rows": 5,
+        "known_subtotal_usd": "1.043762500000000000"
+      },
+      "revised_cost_known_usd": {
+        "known_rows": 5,
+        "known_subtotal_usd": "1.556796736740"
+      }
+    },
+    "logical_calls_total": 15,
+    "financial_samples": [
+      {
+        "hu_id": "HU-BRONZE-001-V1.6: Normalizar nombres de tablas para archivos CSV, JSON y Parquet.",
+        "run_id": "339bbcda32a848b18743cdc4c1cc06e9",
+        "attempt_id": "b0f36d03053f4cbe9823f9382a0f8077",
+        "model": "databricks-claude-haiku-4-5",
+        "role": "verifier",
+        "stage": "verifying",
+        "status": "complete",
+        "acceptance": "parsed",
+        "physical_input_tokens_known": "8246",
+        "physical_output_tokens_known": "705",
+        "calls_total": "1",
+        "calls_with_historical_cost": "1",
+        "historical_cost_known_usd": "0.017656500000000000",
+        "historical_cost_coverage": "complete",
+        "calls_with_revised_cost": "1",
+        "revised_cost_known_usd": "0.017656779105",
+        "revised_cost_coverage": "complete"
+      }
+    ]
+  },
+  {
+    "report": "harness_billing_reconciliation",
+    "run_id": "339bbcda32a848b18743cdc4c1cc06e9",
+    "call_id": "",
+    "statement_id": "01f1c258-4c77-1830-8658-f551e260703e",
+    "state": "SUCCEEDED",
+    "row_count": 4,
+    "financial_subtotals": {
+      "list_cost_known_usd": {
+        "known_rows": 4,
+        "known_subtotal_usd": "12.398245536834324510000000"
+      }
+    },
+    "financial_samples": [
+      {
+        "component": "inference",
+        "attribution_scope": "endpoint_period_shared",
+        "endpoint_name": "databricks-claude-haiku-4-5",
+        "sku_name": "PREMIUM_ANTHROPIC_MODEL_SERVING",
+        "usage_unit": "DBU",
+        "net_usage_quantity": "0.503743752600000000",
+        "list_cost_known_usd": "0.052893094023000000000000",
+        "monetary_coverage": "complete",
+        "price_diagnostics": "[\"unique\"]",
+        "coverage_start_utc": "2026-10-06T14:00:00.000Z",
+        "coverage_end_utc": "2026-10-06T22:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "report": "harness_costops_quality",
+    "run_id": "339bbcda32a848b18743cdc4c1cc06e9",
+    "call_id": "",
+    "statement_id": "01f1c258-4c43-1d27-9b9b-df827fe30e9e",
+    "state": "SUCCEEDED",
+    "row_count": 25,
+    "diagnostics": [
+      {
+        "check_name": "logical_identical_extra_rows",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "physical_identical_extra_rows",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "rescued_run_fields_review_required",
+        "affected_rows": "1"
+      },
+      {
+        "check_name": "logical_conflict_variants",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "missing_logical_key",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "unknown_time_selected_ids_date_unverifiable",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "orphan_or_conflicting_run_attempt",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "rescued_call_fields_review_required",
+        "affected_rows": "15"
+      },
+      {
+        "check_name": "missing_tokens",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "missing_cost",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "missing_pricing_snapshot_legacy",
+        "affected_rows": "15"
+      },
+      {
+        "check_name": "negative_tokens",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "negative_historical_cost",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "physical_conflict_ids",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "physical_missing_request_id",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "unmatched_logical_calls",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "multiple_physical_requests",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "ambiguous_client_request_id",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "model_dimension_missing",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "physical_requests_without_selected_call",
+        "affected_rows": "129"
+      },
+      {
+        "check_name": "conflicting_or_missing_billing_record_id",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "missing_or_ambiguous_prices",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "billing_records_not_monetized",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "calls_after_billing_coverage",
+        "affected_rows": "0"
+      },
+      {
+        "check_name": "cache_cost_uncertainty",
+        "affected_rows": "15"
+      }
+    ]
+  }
+]
